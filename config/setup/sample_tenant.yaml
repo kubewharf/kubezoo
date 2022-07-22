@@ -1,0 +1,6 @@
+apiVersion: tenant.kubezoo.io/v1alpha1
+kind: Tenant
+metadata:
+  name: "111111"
+spec:
+  id: 111111
