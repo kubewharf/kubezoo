@@ -6,8 +6,8 @@ English | [简体中文](./README.zh.md)
 ## Overview
 
 KubeZoo is a lightweight gateway service that leverages the existing namespace model 
-and add multi-tenancy capability to existing Kubernetes. KubeZoo provides 
-view-level isolation among tenants by capturing and transforming the requests and responses.
+and adds multi-tenancy capability to existing Kubernetes. KubeZoo provides 
+view-level isolation among tenants by capturing and transforming requests and responses.
 Please refer to [design doc](./docs/design.md) for details.
 
 <div align="center">
@@ -19,9 +19,9 @@ Please refer to [design doc](./docs/design.md) for details.
 There exists [three common multi-tenancy](https://kubernetes.io/blog/2021/04/15/three-tenancy-models-for-kubernetes/) models for Kubernetes, 
 i.e., Namespace as a Service (NaaS), Cluster as a Service (CaaS), Control Planes as a service (CPaaS). Each of them can be applied to address different 
 use cases. However, our cases have some specific requirements and constraints that can not be met by the existing models, 
-* ***Many Small Tenants*** - there usually exist hundreds of tenants who only need to run small batch workloads containing few pods for tens of minutes.
-* ***Short Turnaround Time*** - users/tenants are usually impatient, who desire to have their service to be ready in minutes.
-* ***Tight Manpower*** - managing thousands of clusters/control-planes can be labour-intensive and infeasible for medium-sized dev team.
+* ***Many Small Tenants*** - there usually exists hundreds of tenants who only need to run small batch workloads containing few pods for tens of minutes.
+* ***Short Turnaround Time*** - users/tenants are usually impatient, who desire to have their service ready in minutes.
+* ***Tight Manpower*** - managing thousands of clusters/control-planes can be labour-intensive and infeasible for medium-sized dev teams.
 
 To address these cases, we present a new tenancy model, i.e., **Kubernetes API as a Service (KAaaS)**, which provides competent isolation with 
 negligible overheads and operation costs. KubeZoo implements this model with all tenants sharing both the control-plane and data-plane, which is 
