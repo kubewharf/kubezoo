@@ -11,7 +11,13 @@ view-level isolation among tenants by capturing and transforming the requests an
 Please refer to [design doc](./docs/design.md) for details.
 
 <div align="center">
-  <img src="docs/img/kubezoo-overview.png" width=80% title="KubeZoo Overview">
+  <!--[if IE]>
+    <img src="docs/img/kubezoo-overview.png" width=80% title="KubeZoo Overview" loading="eager" />
+  <![endif]-->
+  <picture>
+    <source srcset="docs/img/kubezoo-overview-dark.png" width=80% title="KubeZoo Overview" media="(prefers-color-scheme: dark)">
+    <img src="docs/img/kubezoo-overview.png" width=80% title="KubeZoo Overview" loading="eager" />
+  </picture>
 </div>
 
 ## Why KubeZoo

@@ -9,7 +9,13 @@ KubeZoo 是轻量级的 Kubernetes 多租户项目，基于协议转换的核心
 
 
 <div align="center">
-  <img src="docs/img/kubezoo-overview.png" width=80% title="KubeZoo Overview">
+  <!--[if IE]>
+    <img src="docs/img/kubezoo-overview.png" width=80% title="KubeZoo Overview" loading="eager" />
+  <![endif]-->
+  <picture>
+    <source srcset="docs/img/kubezoo-overview-dark.png" width=80% title="KubeZoo Overview" media="(prefers-color-scheme: dark)">
+    <img src="docs/img/kubezoo-overview.png" width=80% title="KubeZoo Overview" loading="eager" />
+  </picture>
 </div>
 
 ## 为什么选择 KubeZoo
