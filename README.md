@@ -37,6 +37,8 @@ suitable for the scenarios where thousands of small tenants need to share an und
   <img src="docs/img/comparison.png" width=80% title="Comparison of Different Solutions">
 </div>
 
+For more details lease refer [FAQ](./docs/faq.md).
+
 ## Prerequisites
 
 Please check the [resource and system requirements](./docs/resource-and-system-requirements.md) before installing KubeZoo.

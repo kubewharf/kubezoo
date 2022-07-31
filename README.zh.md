@@ -28,6 +28,8 @@ KubeZoo 是轻量级的 Kubernetes 多租户项目，基于协议转换的核心
   <img src="docs/img/comparison.png" width=80% title="Comparison of Different Solutions">
 </div>
 
+您可以参考 [FAQ](./docs/faq.zh.md) 获得更多的信息。
+
 ## 前置依赖
 
 请参考 [resource and system requirements](./docs/resource-and-system-requirements.md) 完成 KubeZoo 前置依赖检查。
