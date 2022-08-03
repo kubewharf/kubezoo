@@ -102,20 +102,12 @@ func validateTokenRequest(options *ServerRunOptions) []error {
 	var errs []error
 
 	enableAttempted := options.ServiceAccountSigningKeyFile != "" ||
-		options.Authentication.ServiceAccounts.Issuer != "" ||
+		(len(options.Authentication.ServiceAccounts.Issuers) != 0 && options.Authentication.ServiceAccounts.Issuers[0] != "") ||
 		len(options.Authentication.APIAudiences) != 0
 
 	enableSucceeded := options.ServiceAccountIssuer != nil
 
-	if enableAttempted && !utilfeature.DefaultFeatureGate.Enabled(features.TokenRequest) {
-		errs = append(errs, errors.New("the TokenRequest feature is not enabled but --service-account-signing-key-file, --service-account-issuer and/or --api-audiences flags were passed"))
-	}
-
-	if utilfeature.DefaultFeatureGate.Enabled(features.BoundServiceAccountTokenVolume) && !utilfeature.DefaultFeatureGate.Enabled(features.TokenRequest) {
-		errs = append(errs, errors.New("the BoundServiceAccountTokenVolume feature depends on the TokenRequest feature, but the TokenRequest features is not enabled"))
-	}
-
-	if !enableAttempted && utilfeature.DefaultFeatureGate.Enabled(features.BoundServiceAccountTokenVolume) {
+	if !enableAttempted {
 		errs = append(errs, errors.New("--service-account-signing-key-file and --service-account-issuer are required flags"))
 	}
 
@@ -140,7 +132,6 @@ func (s *ServerRunOptions) Validate() []error {
 	errs = append(errs, s.Authorization.Validate()...)
 	errs = append(errs, s.Audit.Validate()...)
 	errs = append(errs, s.Admission.Validate()...)
-	errs = append(errs, s.InsecureServing.Validate()...)
 	errs = append(errs, s.APIEnablement.Validate(legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme)...)
 	errs = append(errs, validateTokenRequest(s)...)
 	errs = append(errs, metrics.ValidateShowHiddenMetricsVersion(s.ShowHiddenMetricsForVersion)...)

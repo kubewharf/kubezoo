@@ -67,6 +67,23 @@ func WithDiscoveryProxy(handler http.Handler, discoveryProxy proxy.DiscoveryProx
 			}
 			responseJson(w, resources)
 			return
+		} else if len(parts) == 1 && parts[0] == "version" {
+			// path: /version
+			version, err := discoveryProxy.ServerVersion()
+			if err != nil {
+				responseDiscoveryError(w, err)
+				return
+			}
+			responseJson(w, version)
+			return
+		} else if path == "/openapi/v2" || path == "/swagger-2.0.0.pb-v1" {
+			doc, err := discoveryProxy.OpenAPISchema()
+			if err != nil {
+				responseDiscoveryError(w, err)
+				return
+			}
+			responseJson(w, doc)
+			return
 		}
 	})
 }
@@ -104,6 +121,10 @@ func isDiscoveryRequest(requestInfo *request.RequestInfo) bool {
 	}
 	// todo(renjingsi): handle /api
 	if strings.HasPrefix(requestInfo.Path, "/apis") {
+		return true
+	}
+	switch requestInfo.Path {
+	case "version", "openapi/v2", "swagger-2.0.0.pb-v1":
 		return true
 	}
 	return false

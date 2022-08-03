@@ -45,7 +45,7 @@ Please check the [resource and system requirements](./docs/resource-and-system-r
 
 ## Getting started
 
-KubeZoo supports Kubernetes versions up to 1.18. Using higher Kubernetes versions may cause
+KubeZoo supports Kubernetes versions up to 1.24. Using higher Kubernetes versions may cause
 compatibility issues. KubeZoo can be installed using any of the following methods:
 
 | Methods                     | Instruction                                | Estimated time |

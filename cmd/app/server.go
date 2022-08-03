@@ -34,7 +34,6 @@ import (
 	"github.com/kubewharf/kubezoo/pkg/generated/informers/externalversions"
 	"github.com/spf13/cobra"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	extensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	externalinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -46,7 +45,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/request/x509"
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
-	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/server"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -55,8 +53,6 @@ import (
 	serveroptions "k8s.io/apiserver/pkg/server/options"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/apiserver/pkg/storage/etcd3/preflight"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/apiserver/pkg/util/term"
 	"k8s.io/apiserver/pkg/util/webhook"
 	clidiscovery "k8s.io/client-go/discovery"
 	clientgoinformers "k8s.io/client-go/informers"
@@ -65,29 +61,26 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/keyutil"
 	cliflag "k8s.io/component-base/cli/flag"
+	utilflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
 	"k8s.io/component-base/metrics"
 	_ "k8s.io/component-base/metrics/prometheus/workqueue" // for workqueue metric registration
+	"k8s.io/component-base/term"
 	"k8s.io/component-base/version"
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
-	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/capabilities"
-	"k8s.io/kubernetes/pkg/features"
+	master "k8s.io/kubernetes/pkg/controlplane"
+	"k8s.io/kubernetes/pkg/controlplane/reconcilers"
 	"k8s.io/kubernetes/pkg/kubeapiserver"
 	kubeauthenticator "k8s.io/kubernetes/pkg/kubeapiserver/authenticator"
 	kubeoptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
-	"k8s.io/kubernetes/pkg/master"
-	"k8s.io/kubernetes/pkg/master/reconcilers"
-	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/routes"
 	"k8s.io/kubernetes/pkg/serviceaccount"
-	utilflag "k8s.io/kubernetes/pkg/util/flag"
 
 	"github.com/kubewharf/kubezoo/cmd/app/options"
-	generatedopenapi "github.com/kubewharf/kubezoo/pkg/apis/openapi"
 	_ "github.com/kubewharf/kubezoo/pkg/apis/tenant/install"
 	"github.com/kubewharf/kubezoo/pkg/common"
 	"github.com/kubewharf/kubezoo/pkg/convert"
@@ -171,7 +164,7 @@ func Run(completeOptions completedServerRunOptions, stopCh <-chan struct{}) erro
 }
 
 // CreateServerChain creates the apiservers connected via delegation.
-func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan struct{}) (*master.Master, error) {
+func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan struct{}) (*master.Instance, error) {
 	kubeAPIServerConfig, _, serviceResolver, proxyConfig, controlPlaneConfig, err := CreateKubeAPIServerConfig(completedOptions)
 	if err != nil {
 		return nil, err
@@ -179,7 +172,8 @@ func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan
 
 	// If additional API servers are added, they should be gated.
 	apiExtensionsConfig, err := createAPIExtensionsConfig(*kubeAPIServerConfig.GenericConfig, kubeAPIServerConfig.ExtraConfig.VersionedInformers, completedOptions.ServerRunOptions, completedOptions.MasterCount,
-		serviceResolver, webhook.NewDefaultAuthenticationInfoResolverWrapper(nil, kubeAPIServerConfig.GenericConfig.EgressSelector, kubeAPIServerConfig.GenericConfig.LoopbackClientConfig))
+		serviceResolver, webhook.NewDefaultAuthenticationInfoResolverWrapper(nil, kubeAPIServerConfig.GenericConfig.EgressSelector, kubeAPIServerConfig.GenericConfig.LoopbackClientConfig,
+			kubeAPIServerConfig.GenericConfig.TracerProvider))
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +190,7 @@ func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan
 }
 
 // InstallLegacyAPI will install the legacy APIs if they are enabled.
-func InstallLegacyAPI(m *master.Master,
+func InstallLegacyAPI(m *master.Instance,
 	apiResourceConfigSource serverstorage.APIResourceConfigSource,
 	c *master.CompletedConfig,
 	restOptionsGetter generic.RESTOptionsGetter,
@@ -208,19 +202,15 @@ func InstallLegacyAPI(m *master.Master,
 
 	restStorageBuilder := legacyProviders[0]
 	groupName := restStorageBuilder.GroupName()
-	if !apiResourceConfigSource.AnyVersionForGroupEnabled(groupName) {
+	if !apiResourceConfigSource.AnyResourceForGroupEnabled(groupName) {
 		klog.V(1).Infof("Skipping disabled API group %q.", groupName)
 		return nil
 	}
-	apiGroupInfo, enabled, err := restStorageBuilder.NewRESTStorage(
+	apiGroupInfo, err := restStorageBuilder.NewRESTStorage(
 		apiResourceConfigSource, restOptionsGetter)
 	if err != nil {
 		return fmt.Errorf("problem initializing API group %q : %v",
 			groupName, err)
-	}
-	if !enabled {
-		klog.Warningf("API group %q is not enabled, skipping.", groupName)
-		return nil
 	}
 	klog.V(1).Infof("Enabling API group %q.", groupName)
 
@@ -243,7 +233,7 @@ func InstallLegacyAPI(m *master.Master,
 func CreateKubeZooServer(kubeAPIServerConfig *master.Config,
 	delegateAPIServer genericapiserver.DelegationTarget,
 	proxyConfig *ProxyConfig,
-	controlPlaneConfig *ControlPlaneConfig) (*master.Master, error) {
+	controlPlaneConfig *ControlPlaneConfig) (*master.Instance, error) {
 	c := kubeAPIServerConfig.Complete()
 	// disable admission
 	c.GenericConfig.AdmissionControl = nil
@@ -255,7 +245,7 @@ func CreateKubeZooServer(kubeAPIServerConfig *master.Config,
 	if c.ExtraConfig.EnableLogsSupport {
 		routes.Logs{}.Install(s.Handler.GoRestfulContainer)
 	}
-	m := &master.Master{
+	m := &master.Instance{
 		GenericAPIServer:          s,
 		ClusterAuthenticationInfo: c.ExtraConfig.ClusterAuthenticationInfo,
 	}
@@ -403,21 +393,19 @@ func CreateKubeAPIServerConfig(
 		config.ExtraConfig.ClusterAuthenticationInfo.RequestHeaderUsernameHeaders = requestHeaderConfig.UsernameHeaders
 	}
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.ServiceAccountIssuerDiscovery) {
-		// Load the public keys.
-		var pubKeys []interface{}
-		for _, f := range s.Authentication.ServiceAccounts.KeyFiles {
-			keys, err := keyutil.PublicKeysFromFile(f)
-			if err != nil {
-				return nil, nil, nil, nil, nil, fmt.Errorf("failed to parse key file %q: %v", f, err)
-			}
-			pubKeys = append(pubKeys, keys...)
+	// Load the public keys.
+	var pubKeys []interface{}
+	for _, f := range s.Authentication.ServiceAccounts.KeyFiles {
+		keys, err := keyutil.PublicKeysFromFile(f)
+		if err != nil {
+			return nil, nil, nil, nil, nil, fmt.Errorf("failed to parse key file %q: %v", f, err)
 		}
-		// Plumb the required metadata through ExtraConfig.
-		config.ExtraConfig.ServiceAccountIssuerURL = s.Authentication.ServiceAccounts.Issuer
-		config.ExtraConfig.ServiceAccountJWKSURI = s.Authentication.ServiceAccounts.JWKSURI
-		config.ExtraConfig.ServiceAccountPublicKeys = pubKeys
+		pubKeys = append(pubKeys, keys...)
 	}
+	// Plumb the required metadata through ExtraConfig.
+	config.ExtraConfig.ServiceAccountIssuerURL = s.Authentication.ServiceAccounts.Issuers[0]
+	config.ExtraConfig.ServiceAccountJWKSURI = s.Authentication.ServiceAccounts.JWKSURI
+	config.ExtraConfig.ServiceAccountPublicKeys = pubKeys
 
 	return config, insecureServingInfo, serviceResolver, proxyConfig, controlPlaneConfig, nil
 }
@@ -595,9 +583,6 @@ func buildGenericConfig(
 		return
 	}
 
-	if lastErr = s.InsecureServing.ApplyTo(&insecureServingInfo, &genericConfig.LoopbackClientConfig); lastErr != nil {
-		return
-	}
 	if lastErr = s.SecureServing.ApplyTo(&genericConfig.SecureServing, &genericConfig.LoopbackClientConfig); lastErr != nil {
 		return
 	}
@@ -613,8 +598,9 @@ func buildGenericConfig(
 		return
 	}
 
-	genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(legacyscheme.Scheme, extensionsapiserver.Scheme, aggregatorscheme.Scheme))
-	genericConfig.OpenAPIConfig.Info.Title = "Kubernetes"
+	// todo: generate open api definitions
+	//genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(legacyscheme.Scheme, extensionsapiserver.Scheme, aggregatorscheme.Scheme))
+	//genericConfig.OpenAPIConfig.Info.Title = "Kubernetes"
 	genericConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
 		sets.NewString("watch", "proxy"),
 		sets.NewString("attach", "exec", "proxy", "log", "portforward"),
@@ -686,7 +672,7 @@ func applyAuthenticationOptions(o *kubeoptions.BuiltInAuthenticationOptions, gen
 
 	authInfo := &genericConfig.Authentication
 	secureServing := genericConfig.SecureServing
-	openAPIConfig := genericConfig.OpenAPIConfig
+	//openAPIConfig := genericConfig.OpenAPIConfig
 	if authenticatorConfig.ClientCAContentProvider != nil {
 		if err = authInfo.ApplyClientCert(authenticatorConfig.ClientCAContentProvider, secureServing); err != nil {
 			return fmt.Errorf("unable to load client CA file: %v", err)
@@ -698,12 +684,11 @@ func applyAuthenticationOptions(o *kubeoptions.BuiltInAuthenticationOptions, gen
 		}
 	}
 
-	authInfo.SupportsBasicAuth = o.PasswordFile != nil && len(o.PasswordFile.BasicAuthFile) > 0
 	authInfo.APIAudiences = o.APIAudiences
-	if o.ServiceAccounts != nil && o.ServiceAccounts.Issuer != "" && len(o.APIAudiences) == 0 {
-		authInfo.APIAudiences = authenticator.Audiences{o.ServiceAccounts.Issuer}
+	if o.ServiceAccounts != nil && len(o.ServiceAccounts.Issuers) > 0 && o.ServiceAccounts.Issuers[0] != "" && len(o.APIAudiences) == 0 {
+		authInfo.APIAudiences = authenticator.Audiences{o.ServiceAccounts.Issuers[0]}
 	}
-	authInfo.Authenticator, openAPIConfig.SecurityDefinitions, err = authenticatorConfig.New()
+	authInfo.Authenticator, _, err = authenticatorConfig.New()
 	return err
 }
 
@@ -720,7 +705,7 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 	if err := s.GenericServerRunOptions.DefaultAdvertiseAddress(s.SecureServing.SecureServingOptions); err != nil {
 		return options, err
 	}
-	if err := kubeoptions.DefaultAdvertiseAddress(s.GenericServerRunOptions, s.InsecureServing.DeprecatedInsecureServingOptions); err != nil {
+	if err := s.GenericServerRunOptions.DefaultAdvertiseAddress(s.SecureServing.SecureServingOptions); err != nil {
 		return options, err
 	}
 
@@ -768,7 +753,8 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 		}
 	}
 
-	if s.ServiceAccountSigningKeyFile != "" && s.Authentication.ServiceAccounts.Issuer != "" {
+	if s.ServiceAccountSigningKeyFile != "" && len(s.Authentication.ServiceAccounts.Issuers) > 0 &&
+		s.Authentication.ServiceAccounts.Issuers[0] != "" {
 		sk, err := keyutil.PrivateKeyFromFile(s.ServiceAccountSigningKeyFile)
 		if err != nil {
 			return options, fmt.Errorf("failed to parse service-account-issuer-key-file: %v", err)
@@ -782,7 +768,7 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 			}
 		}
 
-		s.ServiceAccountIssuer, err = serviceaccount.JWTTokenGenerator(s.Authentication.ServiceAccounts.Issuer, sk)
+		s.ServiceAccountIssuer, err = serviceaccount.JWTTokenGenerator(s.Authentication.ServiceAccounts.Issuers[0], sk)
 		if err != nil {
 			return options, fmt.Errorf("failed to build token generator: %v", err)
 		}
@@ -790,8 +776,7 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 	}
 
 	if s.Etcd.EnableWatchCache {
-		klog.V(2).Infof("Initializing cache sizes based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
-		sizes := cachesize.NewHeuristicWatchCacheSizes(s.GenericServerRunOptions.TargetRAMMB)
+		sizes := kubeapiserver.DefaultWatchCacheSizes()
 		if userSpecified, err := serveroptions.ParseWatchCacheSizes(s.Etcd.WatchCacheSizes); err == nil {
 			for resource, size := range userSpecified {
 				sizes[resource] = size
@@ -887,19 +872,19 @@ func getServiceIPAndRanges(serviceClusterIPRanges string) (net.IP, net.IPNet, ne
 
 func NewBuildHandlerChanFunc(discoveryProxy proxy.DiscoveryProxy) func(apiHandler http.Handler, c *server.Config) (secure http.Handler) {
 	return func(handler http.Handler, c *genericapiserver.Config) (secure http.Handler) {
-		failedHandler := genericapifilters.Unauthorized(c.Serializer, c.Authentication.SupportsBasicAuth)
+		failedHandler := genericapifilters.Unauthorized(c.Serializer)
 		handler = tenantfilters.WithDiscoveryProxy(handler, discoveryProxy)
 		handler = tenantfilters.WithTenantInfo(handler)
 		handler = genericapifilters.WithAuthentication(handler, c.Authentication.Authenticator, failedHandler, c.Authentication.APIAudiences)
 		handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
-		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc, c.RequestTimeout)
+		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
 		handler = genericfilters.WithWaitGroup(handler, c.LongRunningFunc, c.HandlerChainWaitGroup)
 		handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 		if c.SecureServing != nil && !c.SecureServing.DisableHTTP2 && c.GoawayChance > 0 {
 			handler = genericfilters.WithProbabilisticGoaway(handler, c.GoawayChance)
 		}
 		handler = genericapifilters.WithCacheControl(handler)
-		handler = genericfilters.WithPanicRecovery(handler)
+		handler = genericfilters.WithPanicRecovery(handler, c.RequestInfoResolver)
 		return handler
 	}
 }

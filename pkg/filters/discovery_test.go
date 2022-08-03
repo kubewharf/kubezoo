@@ -24,8 +24,10 @@ import (
 	"net/url"
 	"testing"
 
+	openapi_v2 "github.com/google/gnostic/openapiv2"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
@@ -60,6 +62,14 @@ func (dp *fakeDiscoveryProxy) ServerResourcesForGroupVersion(tenantID, group, ve
 	if tenantID == dp.tenantID && group == dp.group && version == dp.version {
 		return dp.apiResourceList, nil
 	}
+	return nil, nil
+}
+
+func (dp *fakeDiscoveryProxy) ServerVersion() (*version.Info, error) {
+	return nil, nil
+}
+
+func (dp *fakeDiscoveryProxy) OpenAPISchema() (*openapi_v2.Document, error) {
 	return nil, nil
 }
 

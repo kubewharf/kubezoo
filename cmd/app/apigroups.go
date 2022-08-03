@@ -4,6 +4,8 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsapiv1 "k8s.io/api/apps/v1"
+	appsv1beta1 "k8s.io/api/apps/v1beta1"
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -13,22 +15,24 @@ import (
 	autoscalingv2beta2 "k8s.io/api/autoscaling/v2beta2"
 	batchapiv1 "k8s.io/api/batch/v1"
 	batchapiv1beta1 "k8s.io/api/batch/v1beta1"
-	batchapiv2alpha1 "k8s.io/api/batch/v2alpha1"
 	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	coordinationv1beta1 "k8s.io/api/coordination/v1beta1"
 	coreapiv1 "k8s.io/api/core/v1"
-	discoveryv1alpha1 "k8s.io/api/discovery/v1alpha1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
-	eventsapiv1beta1 "k8s.io/api/events/v1beta1"
+	eventsv1 "k8s.io/api/events/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	networkingv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	nodev1 "k8s.io/api/node/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	rbacv1alpha1 "k8s.io/api/rbac/v1alpha1"
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/authentication"
@@ -40,6 +44,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/discovery"
 	"k8s.io/kubernetes/pkg/apis/networking"
+	"k8s.io/kubernetes/pkg/apis/node"
 	"k8s.io/kubernetes/pkg/apis/policy"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 
@@ -155,7 +160,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.Binding{}
 				},
 			},
-			"podTemplates": {
+			"podtemplates": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("PodTemplate"),
 				Resource:        "podtemplates",
@@ -169,7 +174,7 @@ var legacyGroup = common.APIGroupConfig{
 				},
 			},
 
-			"replicationControllers": {
+			"replicationcontrollers": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ReplicationController"),
 				Resource:        "replicationcontrollers",
@@ -182,7 +187,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.ReplicationControllerList{}
 				},
 			},
-			"replicationControllers/status": {
+			"replicationcontrollers/status": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ReplicationController"),
 				Resource:        "replicationcontrollers",
@@ -193,7 +198,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.ReplicationController{}
 				},
 			},
-			"replicationControllers/scale": {
+			"replicationcontrollers/scale": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ReplicationController"),
 				Resource:        "replicationcontrollers",
@@ -201,8 +206,9 @@ var legacyGroup = common.APIGroupConfig{
 				ShortNames:      []string{"rc"},
 				NamespaceScoped: true,
 				NewFunc: func() runtime.Object {
-					return &core.ReplicationController{}
+					return &autoscaling.Scale{}
 				},
+				GroupVersionKindFunc: groupVersionKindForScale,
 			},
 
 			"services": {
@@ -305,7 +311,7 @@ var legacyGroup = common.APIGroupConfig{
 				},
 			},
 
-			"limitRanges": {
+			"limitranges": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("LimitRange"),
 				Resource:        "limitranges",
@@ -319,7 +325,7 @@ var legacyGroup = common.APIGroupConfig{
 				},
 			},
 
-			"resourceQuotas": {
+			"resourcequotas": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ResourceQuota"),
 				Resource:        "resourcequotas",
@@ -332,7 +338,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.ResourceQuotaList{}
 				},
 			},
-			"resourceQuotas/status": {
+			"resourcequotas/status": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ResourceQuota"),
 				Resource:        "resourcequotas",
@@ -395,7 +401,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.SecretList{}
 				},
 			},
-			"serviceAccounts": {
+			"serviceaccounts": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ServiceAccount"),
 				Resource:        "serviceaccounts",
@@ -409,7 +415,7 @@ var legacyGroup = common.APIGroupConfig{
 				},
 			},
 
-			"persistentVolumes": {
+			"persistentvolumes": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("PersistentVolume"),
 				Resource:        "persistentvolumes",
@@ -422,7 +428,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.PersistentVolumeList{}
 				},
 			},
-			"persistentVolumes/status": {
+			"persistentvolumes/status": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("PersistentVolume"),
 				Resource:        "persistentvolumes",
@@ -433,7 +439,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.PersistentVolume{}
 				},
 			},
-			"persistentVolumeClaims": {
+			"persistentvolumeclaims": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("PersistentVolumeClaim"),
 				Resource:        "persistentvolumeclaims",
@@ -446,7 +452,7 @@ var legacyGroup = common.APIGroupConfig{
 					return &core.PersistentVolumeClaimList{}
 				},
 			},
-			"configMaps": {
+			"configmaps": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ConfigMap"),
 				Resource:        "configmaps",
@@ -471,7 +477,7 @@ var legacyGroup = common.APIGroupConfig{
 				},
 			},
 
-			"componentStatuses": {
+			"componentstatuses": {
 				Kind: coreapiv1.
 					SchemeGroupVersion.WithKind("ComponentStatus"),
 				Resource:        "componentstatuses",
@@ -512,11 +518,12 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NewFunc:         func() runtime.Object { return &apps.Deployment{} },
 				},
 				"deployments/scale": {
-					Kind:            appsapiv1.SchemeGroupVersion.WithKind("Deployment"),
-					Resource:        "deployments",
-					Subresource:     "scale",
-					NamespaceScoped: true,
-					NewFunc:         func() runtime.Object { return &apps.Deployment{} },
+					Kind:                 appsapiv1.SchemeGroupVersion.WithKind("Deployment"),
+					Resource:             "deployments",
+					Subresource:          "scale",
+					NamespaceScoped:      true,
+					NewFunc:              func() runtime.Object { return &autoscaling.Scale{} },
+					GroupVersionKindFunc: groupVersionKindForScale,
 				},
 
 				// statefulsets
@@ -536,11 +543,12 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NewFunc:         func() runtime.Object { return &apps.StatefulSet{} },
 				},
 				"statefulsets/scale": {
-					Kind:            appsapiv1.SchemeGroupVersion.WithKind("StatefulSet"),
-					Resource:        "statefulsets",
-					Subresource:     "scale",
-					NamespaceScoped: true,
-					NewFunc:         func() runtime.Object { return &apps.StatefulSet{} },
+					Kind:                 appsapiv1.SchemeGroupVersion.WithKind("StatefulSet"),
+					Resource:             "statefulsets",
+					Subresource:          "scale",
+					NamespaceScoped:      true,
+					NewFunc:              func() runtime.Object { return &autoscaling.Scale{} },
+					GroupVersionKindFunc: groupVersionKindForScale,
 				},
 
 				// daemonsets
@@ -578,11 +586,12 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NewFunc:         func() runtime.Object { return &apps.ReplicaSet{} },
 				},
 				"replicasets/scale": {
-					Kind:            appsapiv1.SchemeGroupVersion.WithKind("ReplicaSet"),
-					Resource:        "replicasets",
-					Subresource:     "scale",
-					NamespaceScoped: true,
-					NewFunc:         func() runtime.Object { return &apps.ReplicaSet{} },
+					Kind:                 appsapiv1.SchemeGroupVersion.WithKind("ReplicaSet"),
+					Resource:             "replicasets",
+					Subresource:          "scale",
+					NamespaceScoped:      true,
+					NewFunc:              func() runtime.Object { return &autoscaling.Scale{} },
+					GroupVersionKindFunc: groupVersionKindForScale,
 				},
 
 				// controllerrevisions
@@ -637,6 +646,20 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NamespaceScoped: true,
 					NewFunc:         func() runtime.Object { return &batch.Job{} },
 				},
+				"cronjobs": {
+					Kind:            batchapiv1.SchemeGroupVersion.WithKind("CronJob"),
+					Resource:        "cronjobs",
+					NamespaceScoped: true,
+					NewFunc:         func() runtime.Object { return &batch.CronJob{} },
+					NewListFunc:     func() runtime.Object { return &batch.CronJobList{} },
+				},
+				"cronjobs/status": {
+					Kind:            batchapiv1.SchemeGroupVersion.WithKind("CronJob"),
+					Resource:        "cronjobs",
+					Subresource:     "status",
+					NamespaceScoped: true,
+					NewFunc:         func() runtime.Object { return &batch.CronJob{} },
+				},
 			},
 			"v1beta1": {
 				"cronjobs": {
@@ -649,23 +672,6 @@ var nonLegacyGroups = []common.APIGroupConfig{
 				},
 				"cronjobs/status": {
 					Kind:            batchapiv1beta1.SchemeGroupVersion.WithKind("CronJob"),
-					Resource:        "cronjobs",
-					Subresource:     "status",
-					NamespaceScoped: true,
-					NewFunc:         func() runtime.Object { return &batch.CronJob{} },
-				},
-			},
-			"v2alpha1": {
-				"cronjobs": {
-					Kind:            batchapiv2alpha1.SchemeGroupVersion.WithKind("CronJob"),
-					Resource:        "cronjobs",
-					ShortNames:      []string{"cj"},
-					NamespaceScoped: true,
-					NewFunc:         func() runtime.Object { return &batch.CronJob{} },
-					NewListFunc:     func() runtime.Object { return &batch.CronJobList{} },
-				},
-				"cronjobs/status": {
-					Kind:            batchapiv2alpha1.SchemeGroupVersion.WithKind("CronJob"),
 					Resource:        "cronjobs",
 					Subresource:     "status",
 					NamespaceScoped: true,
@@ -714,15 +720,15 @@ var nonLegacyGroups = []common.APIGroupConfig{
 	},
 
 	{
-		eventsapiv1beta1.GroupName,
+		eventsv1.GroupName,
 		map[string]map[string]*common.StorageConfig{
-			"v1beta1": {
+			"v1": {
 				"events": {
-					Kind:            eventsapiv1beta1.SchemeGroupVersion.WithKind("Event"),
+					Kind:            eventsv1.SchemeGroupVersion.WithKind("Event"),
 					Resource:        "events",
 					NamespaceScoped: true,
-					NewFunc:         func() runtime.Object { return &core.Event{} },
-					NewListFunc:     func() runtime.Object { return &core.EventList{} },
+					NewFunc:         func() runtime.Object { return &eventsv1.Event{} },
+					NewListFunc:     func() runtime.Object { return &eventsv1.EventList{} },
 				},
 			},
 		},
@@ -845,6 +851,24 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NewListFunc:     func() runtime.Object { return &policy.PodSecurityPolicyList{} },
 				},
 			},
+			"v1": {
+				"poddisruptionbudgets": {
+					Kind:            policyv1.SchemeGroupVersion.WithKind("PodDisruptionBudget"),
+					Resource:        "poddisruptionbudgets",
+					NamespaceScoped: true,
+					ShortNames:      []string{"pdb"},
+					NewFunc:         func() runtime.Object { return &policy.PodDisruptionBudget{} },
+					NewListFunc:     func() runtime.Object { return &policy.PodDisruptionBudgetList{} },
+				},
+				"poddisruptionbudgets/status": {
+					Kind:            policyv1.SchemeGroupVersion.WithKind("PodDisruptionBudget"),
+					Resource:        "poddisruptionbudgets",
+					Subresource:     "status",
+					NamespaceScoped: true,
+					ShortNames:      []string{"pdb"},
+					NewFunc:         func() runtime.Object { return &policy.PodDisruptionBudget{} },
+				},
+			},
 		},
 	},
 
@@ -859,6 +883,29 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					ShortNames:      []string{"netpol"},
 					NewFunc:         func() runtime.Object { return &networking.NetworkPolicy{} },
 					NewListFunc:     func() runtime.Object { return &networking.NetworkPolicyList{} },
+				},
+				"ingresses": {
+					Kind:            networkingv1.SchemeGroupVersion.WithKind("Ingress"),
+					Resource:        "ingresses",
+					NamespaceScoped: true,
+					ShortNames:      []string{"ing"},
+					NewFunc:         func() runtime.Object { return &networking.Ingress{} },
+					NewListFunc:     func() runtime.Object { return &networking.IngressList{} },
+				},
+				"ingresses/status": {
+					Kind:            networkingv1.SchemeGroupVersion.WithKind("Ingress"),
+					Resource:        "ingresses",
+					Subresource:     "status",
+					NamespaceScoped: true,
+					ShortNames:      []string{"ing"},
+					NewFunc:         func() runtime.Object { return &networking.Ingress{} },
+				},
+				"ingressclasses": {
+					Kind:            networkingv1.SchemeGroupVersion.WithKind("IngressClass"),
+					Resource:        "ingressclasses",
+					NamespaceScoped: false,
+					NewFunc:         func() runtime.Object { return &networking.IngressClass{} },
+					NewListFunc:     func() runtime.Object { return &networking.IngressClassList{} },
 				},
 			},
 			"v1beta1": {
@@ -914,20 +961,20 @@ var nonLegacyGroups = []common.APIGroupConfig{
 	},
 
 	{
-		discoveryv1alpha1.GroupName,
+		discoveryv1beta1.GroupName,
 		map[string]map[string]*common.StorageConfig{
-			"v1alpha1": {
+			"v1beta1": {
 				"endpointslices": {
-					Kind:            discoveryv1alpha1.SchemeGroupVersion.WithKind("EndpointSlice"),
+					Kind:            discoveryv1beta1.SchemeGroupVersion.WithKind("EndpointSlice"),
 					Resource:        "endpointslices",
 					NamespaceScoped: true,
 					NewFunc:         func() runtime.Object { return &discovery.EndpointSlice{} },
 					NewListFunc:     func() runtime.Object { return &discovery.EndpointSliceList{} },
 				},
 			},
-			"v1beta1": {
+			"v1": {
 				"endpointslices": {
-					Kind:            discoveryv1beta1.SchemeGroupVersion.WithKind("EndpointSlice"),
+					Kind:            discoveryv1.SchemeGroupVersion.WithKind("EndpointSlice"),
 					Resource:        "endpointslices",
 					NamespaceScoped: true,
 					NewFunc:         func() runtime.Object { return &discovery.EndpointSlice{} },
@@ -1108,6 +1155,25 @@ var nonLegacyGroups = []common.APIGroupConfig{
 		},
 	},
 
+	{
+		nodev1.GroupName,
+		map[string]map[string]*common.StorageConfig{
+			"v1": {
+				"runtimeclasses": {
+					Kind:            nodev1.SchemeGroupVersion.WithKind("RuntimeClass"),
+					Resource:        "runtimeclasses",
+					NamespaceScoped: false,
+					NewFunc: func() runtime.Object {
+						return &node.RuntimeClass{}
+					},
+					NewListFunc: func() runtime.Object {
+						return &node.RuntimeClassList{}
+					},
+				},
+			},
+		},
+	},
+
 	// the following kinds should not be available to serverless kubernetes users, so the api configs are skipped.
 	// group: storage.k8s.io
 	// kinds: CSIDriver, CSINode, StorageClass, VolumeAttachment
@@ -1117,4 +1183,17 @@ var nonLegacyGroups = []common.APIGroupConfig{
 
 	// group: node.k8s.io
 	// kinds: RuntimeClass
+}
+
+func groupVersionKindForScale(containingGV schema.GroupVersion) schema.GroupVersionKind {
+	switch containingGV {
+	case extensionsv1beta1.SchemeGroupVersion:
+		return extensionsv1beta1.SchemeGroupVersion.WithKind("Scale")
+	case appsv1beta1.SchemeGroupVersion:
+		return appsv1beta1.SchemeGroupVersion.WithKind("Scale")
+	case appsv1beta2.SchemeGroupVersion:
+		return appsv1beta2.SchemeGroupVersion.WithKind("Scale")
+	default:
+		return autoscalingv1.SchemeGroupVersion.WithKind("Scale")
+	}
 }

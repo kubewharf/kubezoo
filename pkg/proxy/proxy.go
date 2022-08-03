@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kubewharf/kubezoo/pkg/proxy/pod"
 	"strings"
 
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -73,9 +74,12 @@ type tenantProxy struct {
 
 	// dynamic client is used to communicate with upstream cluster
 	dynamicClient dynamic.Interface
+
+	groupVersionKindFunc common.GroupVersionKindFunc
 }
 
 // tenantProxyWithLister is a wrapper of tenantProxy, it exposes Lister interface to enable installation of List method
+// it also exposes TableConvertor interface to convert list to table
 type tenantProxyWithLister struct {
 	tenantProxy
 }
@@ -86,6 +90,13 @@ func (p *tenantProxyWithLister) NewList() runtime.Object {
 
 func (p *tenantProxyWithLister) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
 	return p.list(ctx, options)
+}
+
+func (tp *tenantProxyWithLister) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	if tp.tableConvertor == nil {
+		return nil, fmt.Errorf("tableConvertor is nil")
+	}
+	return tp.tableConvertor.ConvertToTable(ctx, object, tableOptions)
 }
 
 func (tc *tenantProxy) NamespaceScoped() bool {
@@ -101,6 +112,9 @@ func NewTenantProxy(config common.StorageConfig) (rest.Storage, error) {
 	if config.IsConnecter {
 		return NewConnecterProxy(config.ProxyTransport, config.UpstreamMaster)
 	}
+	if (config.Resource == "pods" || config.Resource == "services" || config.Resource == "nodes") && config.Subresource == "proxy" {
+		return pod.NewProxyREST(config.ProxyTransport, config.UpstreamMaster)
+	}
 
 	if config.NewFunc == nil && config.NewListFunc == nil {
 		return nil, fmt.Errorf("both NewFunc and NewListFunc is nil")
@@ -115,17 +129,18 @@ func NewTenantProxy(config common.StorageConfig) (rest.Storage, error) {
 	}
 
 	proxy := &tenantProxy{
-		kind:             config.Kind,
-		namespaceScoped:  config.NamespaceScoped,
-		isCustomResource: config.IsCustomResource,
-		resource:         config.Resource,
-		subresource:      config.Subresource,
-		shortNames:       config.ShortNames,
-		newFunc:          config.NewFunc,
-		newListFunc:      config.NewListFunc,
-		dynamicClient:    config.DynamicClient,
-		convertor:        config.Convertor,
-		tableConvertor:   tc,
+		kind:                 config.Kind,
+		namespaceScoped:      config.NamespaceScoped,
+		isCustomResource:     config.IsCustomResource,
+		resource:             config.Resource,
+		subresource:          config.Subresource,
+		shortNames:           config.ShortNames,
+		newFunc:              config.NewFunc,
+		newListFunc:          config.NewListFunc,
+		dynamicClient:        config.DynamicClient,
+		convertor:            config.Convertor,
+		groupVersionKindFunc: config.GroupVersionKindFunc,
+		tableConvertor:       tc,
 	}
 	if config.NewListFunc == nil {
 		return proxy, nil
@@ -136,6 +151,13 @@ func NewTenantProxy(config common.StorageConfig) (rest.Storage, error) {
 // isCustomResourceDefinition checks whether the kind is a CRD or not.
 func isCustomResourceDefinition(kind schema.GroupVersionKind) bool {
 	return kind.GroupKind() == apiextensionsv1.Kind("CustomResourceDefinition")
+}
+
+func (tp *tenantProxy) GroupVersionKind(containingGV schema.GroupVersion) schema.GroupVersionKind {
+	if tp.groupVersionKindFunc == nil {
+		return tp.kind
+	}
+	return tp.groupVersionKindFunc(containingGV)
 }
 
 // getClient returns a dynamic client.
@@ -168,7 +190,8 @@ func (tp *tenantProxy) convertUnstructuredToOutput(utd *unstructured.Unstructure
 		return nil
 	}
 
-	original, err := nativeScheme.New(tp.kind)
+	kind := tp.GroupVersionKind(tp.kind.GroupVersion())
+	original, err := nativeScheme.New(kind)
 	if err != nil {
 		return err
 	}
@@ -262,19 +285,12 @@ func (tp *tenantProxy) newList() runtime.Object {
 	return tp.newListFunc()
 }
 
-func (tp *tenantProxy) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	if tp.tableConvertor == nil {
-		return nil, fmt.Errorf("tableConvertor is nil")
-	}
-	return tp.tableConvertor.ConvertToTable(ctx, object, tableOptions)
-}
-
 // Update finds a resource in the storage and updates it. Some implementations
 // may allow updates creates the object - they should set the created boolean
 // to true.
 func (tp *tenantProxy) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo,
 	_ rest.ValidateObjectFunc, _ rest.ValidateObjectUpdateFunc,
-	_ bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
 	if tp.newFunc == nil {
 		return nil, false, fmt.Errorf("newFunc is nil")
 	}
@@ -287,7 +303,15 @@ func (tp *tenantProxy) Update(ctx context.Context, name string, objInfo rest.Upd
 		return tp.guaranteedUpdate(ctx, name, objInfo, options)
 	}
 
-	obj, err := objInfo.UpdatedObject(ctx, nil)
+	original, err := tp.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, false, err
+	}
+	if errors.IsNotFound(err) && !forceAllowCreate {
+		return nil, false, err
+	}
+
+	obj, err := objInfo.UpdatedObject(ctx, original)
 	if err != nil {
 		return nil, false, err
 	}
@@ -348,7 +372,8 @@ func (tp *tenantProxy) update(ctx context.Context, obj runtime.Object, options *
 }
 
 func (tp *tenantProxy) convertInternalObjectToVersionedObject(obj runtime.Object) (runtime.Object, error) {
-	return runtime.UnsafeObjectConvertor(nativeScheme).ConvertToVersion(obj, tp.kind.GroupVersion())
+	kind := tp.GroupVersionKind(tp.kind.GroupVersion())
+	return runtime.UnsafeObjectConvertor(nativeScheme).ConvertToVersion(obj, kind.GroupVersion())
 }
 
 func (tp *tenantProxy) convertInternalObjectToUnstructuredObject(obj runtime.Object) (*unstructured.Unstructured, error) {

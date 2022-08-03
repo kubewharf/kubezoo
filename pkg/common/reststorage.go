@@ -61,6 +61,9 @@ type StorageConfig struct {
 
 	Convertor ObjectConvertor
 
-	ProxyTransport http.RoundTripper
-	UpstreamMaster *url.URL
+	ProxyTransport       http.RoundTripper
+	UpstreamMaster       *url.URL
+	GroupVersionKindFunc GroupVersionKindFunc
 }
+
+type GroupVersionKindFunc func(containingGV schema.GroupVersion) schema.GroupVersionKind
