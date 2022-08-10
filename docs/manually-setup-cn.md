@@ -24,7 +24,7 @@ kubectl config use-context kind-kind
    然后存储在 secret  `upstream-pki` 中.
 
 ```console
-$ sh $KUBEZOO_PATH/hack/lib/gen_pki.sh
+$ bash $KUBEZOO_PATH/hack/lib/gen_pki.sh
 ```
 
 如果上述命令成功运行，你将看到下面两个 secret:

@@ -21,16 +21,23 @@ readonly UPSTREAM_DIR=$TEMP_DIR/upstream
 readonly KUBEZOO_DIR=$TEMP_DIR/kubezoo
 
 get_upstream_pki_kind() {
+    local context_name=$(kubectl config current-context)
+    if [ ${context_name::5} != "kind-" ]; then
+        echo "Current kubectl context is not a kind cluster" >&2
+        exit 1
+    fi
+    local kind_cluster_name=${context_name:5}
+    local kind_docker=$(docker ps --filter "name=${kind_cluster_name}-control-plane" --format "{{.ID}}")
+
     [ -z $UPSTREAM_DIR ] || mkdir -p $UPSTREAM_DIR
-    kind_docker=$(docker ps | grep kindest | awk '{print $1}')
     docker cp $kind_docker:/etc/kubernetes/pki/sa.pub $UPSTREAM_DIR/sa.pub
     docker cp $kind_docker:/etc/kubernetes/pki/apiserver.crt $UPSTREAM_DIR/apiserver.crt
     docker cp $kind_docker:/etc/kubernetes/pki/apiserver.key $UPSTREAM_DIR/apiserver.key
-    yq eval '.users.[]|select(.name=="kind-kind")|.user.client-certificate-data' ~/.kube/config | base64 \
+    yq eval '.users.[]|select(.name=="'${context_name}'")|.user.client-certificate-data' ~/.kube/config | base64 \
         --decode > $UPSTREAM_DIR/client.crt
-    yq eval '.users.[]|select(.name=="kind-kind")|.user.client-key-data' ~/.kube/config | base64 \
+    yq eval '.users.[]|select(.name=="'${context_name}'")|.user.client-key-data' ~/.kube/config | base64 \
         --decode > $UPSTREAM_DIR/client-key.crt
-    yq eval '.clusters.[]|select(.name=="kind-kind")|.cluster.certificate-authority-data' \
+    yq eval '.clusters.[]|select(.name=="'${context_name}'")|.cluster.certificate-authority-data' \
         ~/.kube/config | base64 --decode > $UPSTREAM_DIR/ca.crt
 }
 
