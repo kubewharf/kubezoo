@@ -27,7 +27,7 @@ upstream cluster, which will need to be fetched from the upstream cluster and
 store in the secret `upstream-pki`
 
 ```console
-$ sh $KUBEZOO_PATH/hack/lib/gen_pki.sh
+$ bash $KUBEZOO_PATH/hack/lib/gen_pki.sh
 ```
 
 Upon success, you should be able to see the two secrets
