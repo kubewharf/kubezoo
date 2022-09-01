@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: kubezoo
-        image: kubezoo/kubezoo:v0.1.0
+        image: kubezoo/kubezoo:v0.1.2
         imagePullPolicy: IfNotPresent
         command: 
         - kubezoo
@@ -25,25 +25,22 @@ spec:
         - --apiserver-count=1
         - --cors-allowed-origins=.*
         - --delete-collection-workers=1
-        - --deserialization-cache-size=50000
         - --etcd-prefix=/zoo
         - --etcd-servers=http://kubezoo-etcd-0.kubezoo-etcd:2379
         - --event-ttl=1h0m0s
-        - --insecure-bind-address=0.0.0.0
-        - --insecure-port=8080
         - --logtostderr=true
         - --max-requests-inflight=1002
         - --service-cluster-ip-range=192.168.0.1/16
         - --service-node-port-range=20000-32767
         - --storage-backend=etcd3
-        - --target-ram-mb=30000
         - --authorization-mode=AlwaysAllow
-        - --kubelet-https=true
         - --client-ca-file=/etc/kubezoo/pki/ca.pem
         - --client-ca-key-file=/etc/kubezoo/pki/ca-key.pem
         - --tls-cert-file=/etc/kubezoo/pki/kubernetes.pem
         - --tls-private-key-file=/etc/kubezoo/pki/kubernetes-key.pem
         - --service-account-key-file=/etc/upstream/pki/sa.pub
+        - --service-account-issuer=kubezoo
+        - --service-account-signing-key-file=/etc/upstream/pki/sa.key
         - --proxy-client-cert-file=/etc/upstream/pki/client.crt
         - --proxy-client-key-file=/etc/upstream/pki/client-key.crt
         - --proxy-client-ca-file=/etc/upstream/pki/ca.crt
@@ -53,6 +50,7 @@ spec:
         - --service-account-lookup=false
         - --proxy-bind-address=127.0.0.1
         - --proxy-secure-port=6443
+        - --api-audiences=kubezoo
         ports:
         - containerPort: 6443
           name: secure-port

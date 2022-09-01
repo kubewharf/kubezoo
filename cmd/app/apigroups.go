@@ -33,6 +33,7 @@ import (
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/authentication"
@@ -323,6 +324,7 @@ var legacyGroup = common.APIGroupConfig{
 				NewListFunc: func() runtime.Object {
 					return &core.LimitRangeList{}
 				},
+				TableConvertor: rest.NewDefaultTableConvertor(core.Resource("limitranges")),
 			},
 
 			"resourcequotas": {
@@ -744,6 +746,7 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NamespaceScoped: true,
 					NewFunc:         func() runtime.Object { return &rbac.Role{} },
 					NewListFunc:     func() runtime.Object { return &rbac.RoleList{} },
+					TableConvertor:  rest.NewDefaultTableConvertor(rbac.Resource("roles")),
 				},
 				"rolebindings": {
 					Kind:            rbacv1.SchemeGroupVersion.WithKind("RoleBinding"),
@@ -758,6 +761,7 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NamespaceScoped: false,
 					NewFunc:         func() runtime.Object { return &rbac.ClusterRole{} },
 					NewListFunc:     func() runtime.Object { return &rbac.ClusterRoleList{} },
+					TableConvertor:  rest.NewDefaultTableConvertor(rbac.Resource("clusterroles")),
 				},
 				"clusterrolebindings": {
 					Kind:            rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
@@ -774,6 +778,7 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NamespaceScoped: true,
 					NewFunc:         func() runtime.Object { return &rbac.Role{} },
 					NewListFunc:     func() runtime.Object { return &rbac.RoleList{} },
+					TableConvertor:  rest.NewDefaultTableConvertor(rbac.Resource("roles")),
 				},
 				"rolebindings": {
 					Kind:            rbacv1alpha1.SchemeGroupVersion.WithKind("RoleBinding"),
@@ -788,6 +793,7 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NamespaceScoped: false,
 					NewFunc:         func() runtime.Object { return &rbac.ClusterRole{} },
 					NewListFunc:     func() runtime.Object { return &rbac.ClusterRoleList{} },
+					TableConvertor:  rest.NewDefaultTableConvertor(rbac.Resource("clusterroles")),
 				},
 				"clusterrolebindings": {
 					Kind:            rbacv1alpha1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
@@ -804,6 +810,7 @@ var nonLegacyGroups = []common.APIGroupConfig{
 					NamespaceScoped: true,
 					NewFunc:         func() runtime.Object { return &rbac.Role{} },
 					NewListFunc:     func() runtime.Object { return &rbac.RoleList{} },
+					TableConvertor:  rest.NewDefaultTableConvertor(rbac.Resource("roles")),
 				},
 				"rolebindings": {
 					Kind:            rbacv1beta1.SchemeGroupVersion.WithKind("RoleBinding"),
