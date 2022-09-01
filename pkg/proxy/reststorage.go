@@ -20,13 +20,14 @@ import (
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	"k8s.io/kubernetes/pkg/master"
+	master "k8s.io/kubernetes/pkg/controlplane"
 
 	"github.com/kubewharf/kubezoo/pkg/common"
 )
@@ -36,7 +37,7 @@ type RESTStorageProvider struct {
 }
 
 // NewRESTStorage returns a rest storage.
-func (r RESTStorageProvider) NewRESTStorage(apiResourceConfigSource serverstorage.APIResourceConfigSource, restOptionsGetter generic.RESTOptionsGetter) (genericapiserver.APIGroupInfo, bool, error) {
+func (r RESTStorageProvider) NewRESTStorage(apiResourceConfigSource serverstorage.APIResourceConfigSource, restOptionsGetter generic.RESTOptionsGetter) (genericapiserver.APIGroupInfo, error) {
 	scheme := legacyscheme.Scheme
 	apiextensionsv1.AddToScheme(scheme)
 	apiextensions.AddToScheme(scheme)
@@ -44,15 +45,29 @@ func (r RESTStorageProvider) NewRESTStorage(apiResourceConfigSource serverstorag
 	for version, resources := range r.apiGroupConfig.StorageConfigs {
 		storage := map[string]rest.Storage{}
 		for resource, config := range resources {
+			// remove FieldLabelConversionFunc for kind, so that KubeZoo talks with upstream cluster apiserver with versioned field labels
+			if err := removeFieldLabelConversionFunc(scheme, config.Kind); err != nil {
+				return genericapiserver.APIGroupInfo{}, err
+			}
+
 			ps, err := NewTenantProxy(*config)
 			if err != nil {
-				return genericapiserver.APIGroupInfo{}, false, err
+				return genericapiserver.APIGroupInfo{}, err
 			}
 			storage[resource] = ps
 		}
 		apiGroupInfo.VersionedResourcesStorageMap[version] = storage
 	}
-	return apiGroupInfo, true, nil
+	return apiGroupInfo, nil
+}
+
+func removeFieldLabelConversionFunc(scheme *runtime.Scheme, kind schema.GroupVersionKind) error {
+	if scheme == nil {
+		return nil
+	}
+	return scheme.AddFieldLabelConversionFunc(kind, func(label, value string) (internalLabel, internalValue string, err error) {
+		return label, value, nil
+	})
 }
 
 // NewStoragesForGV returns a rest storage for group version.

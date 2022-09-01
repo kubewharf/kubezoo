@@ -55,7 +55,14 @@ func (t *objectReferenceTransformer) Forward(or *internal.ObjectReference, tenan
 
 	namespaced, customResourceGroup, err := t.checkGroupKind(gv.Group, or.Kind, tenantID, true)
 	if err != nil {
-		return nil, err
+		// APIVersion and Kind of objectReference may be empty, in such cases we can't tell whether it is namespaced,
+		// so just add tenantID prefix if namespace or name is not empty.
+		if len(or.Namespace) != 0 {
+			or.Namespace = util.AddTenantIDPrefix(tenantID, or.Namespace)
+		} else if len(or.Name) != 0 {
+			or.Name = util.AddTenantIDPrefix(tenantID, or.Name)
+		}
+		return or, nil
 	}
 	if !namespaced && len(or.Name) != 0 {
 		or.Name = util.AddTenantIDPrefix(tenantID, or.Name)
@@ -81,7 +88,14 @@ func (t *objectReferenceTransformer) Backward(or *internal.ObjectReference, tena
 
 	namespaced, customResourceGroup, err := t.checkGroupKind(gv.Group, or.Kind, tenantID, false)
 	if err != nil {
-		return nil, err
+		// APIVersion and Kind of objectReference may be empty, in such cases we can't tell whether it is namespaced,
+		// so just trim tenantID prefix if namespace or name is not empty.
+		if len(or.Namespace) != 0 {
+			or.Namespace = util.TrimTenantIDPrefix(tenantID, or.Namespace)
+		} else if len(or.Name) != 0 {
+			or.Name = util.TrimTenantIDPrefix(tenantID, or.Name)
+		}
+		return or, nil
 	}
 	if namespaced && len(or.Namespace) != 0 {
 		if !strings.HasPrefix(or.Namespace, tenantID) {

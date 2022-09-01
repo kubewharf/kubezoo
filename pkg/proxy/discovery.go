@@ -22,7 +22,10 @@ import (
 
 	v1 "k8s.io/apiextensions-apiserver/pkg/client/listers/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
+
+	openapi_v2 "github.com/google/gnostic/openapiv2"
 
 	"github.com/kubewharf/kubezoo/pkg/util"
 )
@@ -35,6 +38,10 @@ type DiscoveryProxy interface {
 	ServerVersionsForGroup(tenantID, group string) (*metav1.APIGroup, error)
 	// ServerResourcesForGroupVersion returns the supported resources for a group and version for tenant.
 	ServerResourcesForGroupVersion(tenantID, group, version string) (*metav1.APIResourceList, error)
+	// ServerVersion retrieves and parses the server's version (git version).
+	ServerVersion() (*version.Info, error)
+	// OpenAPISchema fetches the open api schema using a rest client and parses the proto.
+	OpenAPISchema() (*openapi_v2.Document, error)
 }
 
 // discoveryProxy implements the DiscoveryProxy interface
@@ -140,4 +147,13 @@ func (dp *discoveryProxy) ServerResourcesForGroupVersion(tenantID, group, versio
 	}
 	util.ConvertUpstreamResourceListToTenant(tenantID, resourceList)
 	return resourceList, nil
+}
+
+// ServerVersion retrieves and parses the server's version (git version).
+func (dp *discoveryProxy) ServerVersion() (*version.Info, error) {
+	return dp.discoveryClient.ServerVersion()
+}
+
+func (dp *discoveryProxy) OpenAPISchema() (*openapi_v2.Document, error) {
+	return dp.discoveryClient.OpenAPISchema()
 }

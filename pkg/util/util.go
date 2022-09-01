@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/kubernetes/pkg/apis/core"
 	//"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -343,7 +342,7 @@ func ConvertInternalListOptions(ctx context.Context, options *metainternalversio
 	out := &metav1.ListOptions{}
 	if options.FieldSelector != nil {
 		fn := func(label, value string) (string, string, error) {
-			if label == core.EventInvolvedNamespaceField && value != "" && tenantID != "" {
+			if label == "involvedObject.namespace" && value != "" && tenantID != "" {
 				value = tenantID + "-" + value
 			}
 			return label, value, nil

@@ -36,7 +36,7 @@ KubeZoo 是轻量级的 Kubernetes 多租户项目，基于协议转换的核心
 
 ## 部署
 
-KubeZoo 支持 Kubernetes 1.18 及以下版本，更高的 Kubernetes 版本可能会导致兼容相关的问题。您可以采用如下方式部署 KubeZoo:
+KubeZoo 支持 Kubernetes 1.24 及以下版本，更高的 Kubernetes 版本可能会导致兼容相关的问题。您可以采用如下方式部署 KubeZoo:
 
 
 | Methods                     | Instruction                                | Estimated time |

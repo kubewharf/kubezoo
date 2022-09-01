@@ -197,28 +197,25 @@ func createKubeAPIExtensionsServer(apiextensionsConfig *apiextensionsapiserver.C
 		Informers:        proxyConfig.crdInformers,
 	}
 
-	apiResourceConfig := c.GenericConfig.MergedResourceConfig
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(apiextensions.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	if apiResourceConfig.VersionEnabled(v1beta1.SchemeGroupVersion) {
-		for resource := range v1beta1StorageConfig {
-			proxyConfig.ApplyToStorage(v1beta1StorageConfig[resource])
-		}
-		storage, err := proxy.NewStoragesForGV(v1beta1StorageConfig)
-		if err != nil {
-			return nil, err
-		}
-		apiGroupInfo.VersionedResourcesStorageMap[v1beta1.SchemeGroupVersion.Version] = storage
+
+	for resource := range v1beta1StorageConfig {
+		proxyConfig.ApplyToStorage(v1beta1StorageConfig[resource])
 	}
-	if apiResourceConfig.VersionEnabled(v1.SchemeGroupVersion) {
-		for resource := range v1StorageConfig {
-			proxyConfig.ApplyToStorage(v1StorageConfig[resource])
-		}
-		storage, err := proxy.NewStoragesForGV(v1StorageConfig)
-		if err != nil {
-			return nil, err
-		}
-		apiGroupInfo.VersionedResourcesStorageMap[v1.SchemeGroupVersion.Version] = storage
+	storage, err := proxy.NewStoragesForGV(v1beta1StorageConfig)
+	if err != nil {
+		return nil, err
 	}
+	apiGroupInfo.VersionedResourcesStorageMap[v1beta1.SchemeGroupVersion.Version] = storage
+
+	for resource := range v1StorageConfig {
+		proxyConfig.ApplyToStorage(v1StorageConfig[resource])
+	}
+	storage, err = proxy.NewStoragesForGV(v1StorageConfig)
+	if err != nil {
+		return nil, err
+	}
+	apiGroupInfo.VersionedResourcesStorageMap[v1.SchemeGroupVersion.Version] = storage
 
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
 		return nil, err
