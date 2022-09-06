@@ -6,8 +6,7 @@ a `kind` cluster as the upstream cluster.
 
 ### Prerequisites
 
-Please install the latest version of [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 
-and [kubectl](https://kubernetes.io/docs/tasks/tools/)
+Please install the latest version of [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/), [yq](https://github.com/mikefarah/yq#install) and [cfssl](https://github.com/cloudflare/cfssl#installation)
 
 ### Create `kind` cluster and set kubectl context
 
