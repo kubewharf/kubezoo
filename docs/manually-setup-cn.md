@@ -5,8 +5,7 @@
 
 ### 前置条件
 
-请安装最新版本的 [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 
-和 [kubectl](https://kubernetes.io/docs/tasks/tools/)
+请安装最新版本的 [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/), [yq](https://github.com/mikefarah/yq#install) 和 [cfssl](https://github.com/cloudflare/cfssl#installation)
 
 ### 创建 `kind` 集群并配置 kubectl 上下文 
 
