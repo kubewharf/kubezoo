@@ -29,11 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kubewharf/kubezoo/pkg/controller"
-	"github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned"
-	"github.com/kubewharf/kubezoo/pkg/generated/informers/externalversions"
 	"github.com/spf13/cobra"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	extensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	externalinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -45,6 +43,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/request/x509"
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/server"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -70,6 +69,7 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
+	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/capabilities"
 	master "k8s.io/kubernetes/pkg/controlplane"
@@ -81,11 +81,15 @@ import (
 	"k8s.io/kubernetes/pkg/serviceaccount"
 
 	"github.com/kubewharf/kubezoo/cmd/app/options"
+	generatedopenapi "github.com/kubewharf/kubezoo/pkg/apis/openapi"
 	_ "github.com/kubewharf/kubezoo/pkg/apis/tenant/install"
 	"github.com/kubewharf/kubezoo/pkg/common"
+	"github.com/kubewharf/kubezoo/pkg/controller"
 	"github.com/kubewharf/kubezoo/pkg/convert"
 	"github.com/kubewharf/kubezoo/pkg/dynamic"
 	tenantfilters "github.com/kubewharf/kubezoo/pkg/filters"
+	"github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned"
+	"github.com/kubewharf/kubezoo/pkg/generated/informers/externalversions"
 	"github.com/kubewharf/kubezoo/pkg/proxy"
 	tenantrest "github.com/kubewharf/kubezoo/pkg/rest"
 	"github.com/kubewharf/kubezoo/pkg/util"
@@ -598,9 +602,8 @@ func buildGenericConfig(
 		return
 	}
 
-	// todo: generate open api definitions
-	//genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(legacyscheme.Scheme, extensionsapiserver.Scheme, aggregatorscheme.Scheme))
-	//genericConfig.OpenAPIConfig.Info.Title = "Kubernetes"
+	genericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(generatedopenapi.GetOpenAPIDefinitions, openapinamer.NewDefinitionNamer(legacyscheme.Scheme, extensionsapiserver.Scheme, aggregatorscheme.Scheme))
+	genericConfig.OpenAPIConfig.Info.Title = "Kubernetes"
 	genericConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
 		sets.NewString("watch", "proxy"),
 		sets.NewString("attach", "exec", "proxy", "log", "portforward"),
@@ -672,7 +675,7 @@ func applyAuthenticationOptions(o *kubeoptions.BuiltInAuthenticationOptions, gen
 
 	authInfo := &genericConfig.Authentication
 	secureServing := genericConfig.SecureServing
-	//openAPIConfig := genericConfig.OpenAPIConfig
+
 	if authenticatorConfig.ClientCAContentProvider != nil {
 		if err = authInfo.ApplyClientCert(authenticatorConfig.ClientCAContentProvider, secureServing); err != nil {
 			return fmt.Errorf("unable to load client CA file: %v", err)
