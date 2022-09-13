@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
+
 	//"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -59,6 +60,35 @@ func TrimTenantIDPrefix(tenantID, input string) string {
 
 var invalidPrefixedNamespaceErr = fmt.Errorf("TenantID prefixed namespace must be in the form %s",
 	AddTenantIDPrefix("tenantID", "namespace"))
+
+var (
+	errInvalidTenantNameLength = "tenant ID must be exactly 6 characters"
+	errNonRfc1123TenantName    = "tenant ID must contain only alphanumeric characters or -, and must not start with a -"
+)
+
+func ValidateTenantName(tenantId string) *string {
+	if len(tenantId) != TenantIDLength {
+		return &errInvalidTenantNameLength
+	}
+
+	// RFC 1123 validation
+	// The last character can be dash because tenant ID is always joined with the actual namespace name,
+	// so the trailing dash will only lead to names like `tenant--default`
+	for i, char := range tenantId {
+		if 'a' <= char && char <= 'z' {
+			continue
+		}
+		if '0' <= char && char <= '9' {
+			continue
+		}
+		if i > 0 && char == '-' {
+			continue
+		}
+		return &errNonRfc1123TenantName
+	}
+
+	return nil
+}
 
 // GetTenantIDFromNamespace get the tenantId from the prefix of namespace.
 func GetTenantIDFromNamespace(namespace string) (string, error) {
