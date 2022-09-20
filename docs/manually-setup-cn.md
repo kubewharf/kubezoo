@@ -95,6 +95,8 @@ $ kubectl apply -f config/setup/sample_tenant.yaml --context zoo
 tenant.tenant.kubezoo.io/111111 created
 ```
 
+租户名称必须是有效的6字符[RFC 1123][rfc1123-label]DNS标签前缀(`[A-Za-z0-9][A-Za-z0-9\-]{5}`)。
+
 ### 获取租户的 kubeconfigs 文件
 
 ```console
@@ -141,3 +143,5 @@ default              kubezoo-etcd-0                               1/1     Runnin
 default              test                                         1/1     Running   0          2m41s
 ...
 ```
+
+[rfc1123-label]: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
