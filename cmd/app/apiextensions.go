@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/features"
+	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -84,6 +85,7 @@ var v1StorageConfig = map[string]*common.StorageConfig{
 		NewListFunc: func() runtime.Object {
 			return &apiextensions.CustomResourceDefinitionList{}
 		},
+		TableConvertor: rest.NewDefaultTableConvertor(apiextensions.Resource("customresourcedefinitions")),
 	},
 	"customresourcedefinitions/status": {
 		Kind: v1.SchemeGroupVersion.
@@ -111,6 +113,7 @@ var v1beta1StorageConfig = map[string]*common.StorageConfig{
 		NewListFunc: func() runtime.Object {
 			return &apiextensions.CustomResourceDefinitionList{}
 		},
+		TableConvertor: rest.NewDefaultTableConvertor(apiextensions.Resource("customresourcedefinitions")),
 	},
 	"customresourcedefinitions/status": {
 		Kind: v1beta1.SchemeGroupVersion.

@@ -31,6 +31,7 @@ get_upstream_pki_kind() {
 
     [ -z $UPSTREAM_DIR ] || mkdir -p $UPSTREAM_DIR
     docker cp $kind_docker:/etc/kubernetes/pki/sa.pub $UPSTREAM_DIR/sa.pub
+    docker cp $kind_docker:/etc/kubernetes/pki/sa.key $UPSTREAM_DIR/sa.key
     docker cp $kind_docker:/etc/kubernetes/pki/apiserver.crt $UPSTREAM_DIR/apiserver.crt
     docker cp $kind_docker:/etc/kubernetes/pki/apiserver.key $UPSTREAM_DIR/apiserver.key
     yq eval '.users.[]|select(.name=="'${context_name}'")|.user.client-certificate-data' ~/.kube/config | base64 \
@@ -159,6 +160,7 @@ create_pki_secret() {
         && 
     kubectl create secret generic upstream-pki \
         --from-file=sa.pub=$UPSTREAM_DIR/sa.pub \
+        --from-file=sa.key=$UPSTREAM_DIR/sa.key \
         --from-file=client.crt=$UPSTREAM_DIR/client.crt \
         --from-file=client-key.crt=$UPSTREAM_DIR/client-key.crt \
         --from-file=ca.crt=$UPSTREAM_DIR/ca.crt

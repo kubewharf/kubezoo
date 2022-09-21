@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/kubewharf/kubezoo/pkg/dynamic"
 )
@@ -60,6 +61,8 @@ type StorageConfig struct {
 	DynamicClient dynamic.Interface
 
 	Convertor ObjectConvertor
+
+	TableConvertor rest.TableConvertor
 
 	ProxyTransport       http.RoundTripper
 	UpstreamMaster       *url.URL

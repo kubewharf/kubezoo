@@ -23,7 +23,6 @@ import (
 	"github.com/kubewharf/kubezoo/pkg/proxy/pod"
 	"strings"
 
-	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -123,9 +122,9 @@ func NewTenantProxy(config common.StorageConfig) (rest.Storage, error) {
 		return nil, fmt.Errorf("subresource (%s:%s) should not have list method", config.Resource, config.Subresource)
 	}
 
-	tc := rest.NewDefaultTableConvertor(apiextensions.Resource("customresourcedefinitions"))
-	if !isCustomResourceDefinition(config.Kind) {
-		tc = printerstorage.TableConvertor{TableGenerator: printers.NewTableGenerator().With(printersinternal.AddHandlers)}
+	var tc rest.TableConvertor = printerstorage.TableConvertor{TableGenerator: printers.NewTableGenerator().With(printersinternal.AddHandlers)}
+	if config.TableConvertor != nil {
+		tc = config.TableConvertor
 	}
 
 	proxy := &tenantProxy{
