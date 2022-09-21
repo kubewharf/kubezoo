@@ -99,6 +99,8 @@ $ kubectl apply -f config/setup/sample_tenant.yaml --context zoo
 tenant.tenant.kubezoo.io/111111 created
 ```
 
+The tenant name must be a valid 6-character [RFC 1123][rfc1123-label] DNS label prefix (`[A-Za-z0-9][A-Za-z0-9\-]{5}`).
+
 ### Get the kubeconfigs of the tenant
 
 ```console
@@ -145,3 +147,5 @@ default              kubezoo-etcd-0                               1/1     Runnin
 default              test                                         1/1     Running   0          2m41s
 ...
 ```
+
+[rfc1123-label]: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names

@@ -29,6 +29,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 
 	"github.com/kubewharf/kubezoo/pkg/apis/tenant/v1alpha1"
+	"github.com/kubewharf/kubezoo/pkg/util"
 )
 
 // NewStrategy creates and returns a tenantStrategy instance
@@ -76,6 +77,17 @@ func (tenantStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 }
 
 func (tenantStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
+	tenant := obj.(*v1alpha1.Tenant)
+	err := util.ValidateTenantName(tenant.Name)
+	if err != nil {
+		return field.ErrorList{&field.Error{
+			Type:     field.ErrorTypeInvalid,
+			Field:    "name",
+			BadValue: tenant.Name,
+			Detail:   *err,
+		}}
+	}
+
 	return nil
 }
 
