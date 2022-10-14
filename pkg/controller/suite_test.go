@@ -19,10 +19,10 @@ package controller
 import (
 	"context"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -76,7 +76,9 @@ var _ = BeforeSuite(func() {
 
 	// create control plane env
 	controlPlaneTestEnv = &envtest.Environment{
-		CRDs: []*apiextensionsv1.CustomResourceDefinition{tenantCRD},
+		CRDInstallOptions: envtest.CRDInstallOptions{
+			CRDs: []*apiextensionsv1.CustomResourceDefinition{tenantCRD},
+		},
 	}
 
 	// start control plane
@@ -119,14 +121,13 @@ var _ = BeforeSuite(func() {
 	// trim the prefix "https://" and the suffix "/"
 	// because the Host in a kubeconfig is like "https://127.0.0.1:6443/"
 	// and the parameter of func net.SplitHostPort() should be a domain name, an IPv4 or IPv6 address with port only, not a URL.
-	upstreamCfg.Host = strings.TrimPrefix(upstreamCfg.Host, "https://")
-	upstreamCfg.Host = strings.TrimSuffix(upstreamCfg.Host, "/")
-
-	// generate client ca key and cert for upstream cluster
-	host, port, err := net.SplitHostPort(upstreamCfg.Host)
+	url, err := url.Parse(upstreamCfg.Host)
+	Expect(err).NotTo(HaveOccurred())
+	host, port, err := net.SplitHostPort(url.Host)
 	Expect(err).NotTo(HaveOccurred())
 	portInt, err := strconv.Atoi(port)
 	Expect(err).NotTo(HaveOccurred())
+	// generate client ca key and cert for upstream cluster
 	_, _, err = cert.GenerateSelfSignedCertKeyWithFixtures(host, nil, nil, tempDir)
 	Expect(err).NotTo(HaveOccurred())
 	clientCAKey := path.Join(tempDir, host+"__.key")
@@ -143,6 +144,7 @@ var _ = BeforeSuite(func() {
 			discoveryClient,
 			dynamicClient,
 			crdClient,
+			nil,
 			clientCACert,
 			clientCAKey,
 			host,

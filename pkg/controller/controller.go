@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -46,7 +47,10 @@ import (
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	rbacv1helpers "k8s.io/kubernetes/pkg/apis/rbac/v1"
 
+	quotav1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/quota/v1alpha1"
+	"github.com/kubewharf/kubezoo/pkg/common"
 	"github.com/kubewharf/kubezoo/pkg/dynamic"
+	quotaclient "github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned/typed/quota/v1alpha1"
 	tenantclient "github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned/typed/tenant/v1alpha1"
 	tenantlister "github.com/kubewharf/kubezoo/pkg/generated/listers/tenant/v1alpha1"
 	"github.com/kubewharf/kubezoo/pkg/util"
@@ -55,7 +59,7 @@ import (
 type EventType int
 
 const (
-	Add = iota
+	Create = iota
 	Update
 	Delete
 )
@@ -80,18 +84,19 @@ type TenantController struct {
 	tenantInformer          cache.SharedIndexInformer
 	tenantLister            tenantlister.TenantLister
 	tenantClient            tenantclient.TenantV1alpha1Interface
-	upstreamCoreClient      v1.CoreV1Interface
-	upstreamRbacClient      rbacclient.RbacV1Interface
+	clusterquotaCli         quotaclient.QuotaV1alpha1Interface
 	upstreamDiscoveryClient *discovery.DiscoveryClient
 	upstreamDynamicClient   dynamic.Interface
 	upstreamCRDClient       *apiextensions.Clientset
+	upstreamCoreClient      v1.CoreV1Interface
+	upstreamRbacClient      rbacclient.RbacV1Interface
 	clientCAFile            string
 	clientCAKeyFile         string
 	kubeZooHostAddress      string
 }
 
 // newTenantController create a controller to handler the events of tenant.
-func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, coreCli v1.CoreV1Interface, rbacCli rbacclient.RbacV1Interface, discoveryCli *discovery.DiscoveryClient, dynamicCli dynamic.Interface, crdClient *apiextensions.Clientset, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) *TenantController {
+func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, coreCli v1.CoreV1Interface, rbacCli rbacclient.RbacV1Interface, quotaClient quotaclient.QuotaV1alpha1Interface, discoveryCli *discovery.DiscoveryClient, dynamicCli dynamic.Interface, crdClient *apiextensions.Clientset, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) *TenantController {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	var (
 		newEvent Event
@@ -101,7 +106,7 @@ func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.Te
 		AddFunc: func(obj interface{}) {
 			newEvent.tenantId, err = cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
-				newEvent.eventType = Add
+				newEvent.eventType = Create
 				queue.Add(newEvent)
 			}
 		},
@@ -128,6 +133,7 @@ func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.Te
 		tenantClient:            tenantCli,
 		upstreamCoreClient:      coreCli,
 		upstreamRbacClient:      rbacCli,
+		clusterquotaCli:         quotaClient,
 		upstreamDiscoveryClient: discoveryCli,
 		upstreamDynamicClient:   dynamicCli,
 		upstreamCRDClient:       crdClient,
@@ -138,8 +144,8 @@ func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.Te
 }
 
 // Run starts the tenant controller
-func Run(stopCh <-chan struct{}, ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, typedCli kubernetes.Interface, discoveryCli *discovery.DiscoveryClient, dynamicCli dynamic.Interface, crdClient *apiextensions.Clientset, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) {
-	tc := newTenantController(ti, tenantCli, typedCli.CoreV1(), typedCli.RbacV1(), discoveryCli, dynamicCli, crdClient, clientCAFile, clientCAKeyFile, kubeZooBindAddress, kubeZooSecurePort)
+func Run(stopCh <-chan struct{}, ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, typedCli kubernetes.Interface, discoveryCli *discovery.DiscoveryClient, dynamicCli dynamic.Interface, crdClient *apiextensions.Clientset, quotaClient quotaclient.QuotaV1alpha1Interface, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) {
+	tc := newTenantController(ti, tenantCli, typedCli.CoreV1(), typedCli.RbacV1(), quotaClient, discoveryCli, dynamicCli, crdClient, clientCAFile, clientCAKeyFile, kubeZooBindAddress, kubeZooSecurePort)
 	defer utilruntime.HandleCrash()
 	defer tc.queue.ShutDown()
 
@@ -198,8 +204,10 @@ func (tc *TenantController) processNextItem() bool {
 func (tc *TenantController) processItem(e Event) error {
 	// process events based on its type
 	switch e.eventType {
-	case Add, Update:
-		return tc.onTenantAddOrUpdate(e.tenantId)
+	case Create:
+		return tc.onTeanntCreate(e.tenantId)
+	case Update:
+		return tc.onTeanntUpdate(e.tenantId)
 	case Delete:
 		klog.Warningf("deleting tenant %v", e.tenantId)
 		return nil
@@ -207,7 +215,33 @@ func (tc *TenantController) processItem(e Event) error {
 	return nil
 }
 
-// onTenantAddOrUpdate handles the ADD or UPDATE event of a Tenant.
+func (tc *TenantController) onTeanntCreate(tenantID string) error {
+	if err := tc.onTenantAddOrUpdate(tenantID); err != nil {
+		return err
+	}
+
+	if err := tc.syncResources(tenantID); err != nil {
+		return err
+	}
+
+	if err := tc.syncClusterResourceQuota(tenantID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tc *TenantController) onTeanntUpdate(tenantID string) error {
+	if err := tc.onTenantAddOrUpdate(tenantID); err != nil {
+		return err
+	}
+
+	if err := tc.syncClusterResourceQuota(tenantID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// onTenantAddOrUpdate handles the Create or UPDATE event of a Tenant.
 func (tc *TenantController) onTenantAddOrUpdate(tenantId string) error {
 	tenant, err := tc.tenantClient.Tenants().Get(context.TODO(), tenantId, metav1.GetOptions{})
 	if err != nil {
@@ -237,7 +271,7 @@ func (tc *TenantController) onTenantAddOrUpdate(tenantId string) error {
 		return nil
 	}
 
-	return tc.syncResources(tenantId)
+	return nil
 }
 
 // deleteResources deletes resources belonging to the tenant from the upstream cluster.
@@ -254,6 +288,10 @@ func (tc *TenantController) deleteResources(tenantId string) error {
 	nonCRDResources := tc.filterCRDs(clusterScopedResources)
 	if err := tc.deleteNonCRDClusterScopedResources(tenantId, nonCRDResources); err != nil {
 		return err
+	}
+
+	if err := tc.syncClusterResourceQuota(tenantId); err != nil {
+		return errors.Errorf("fail to delete clusterResourceQuota for tenant %s: %v", tenantId, err)
 	}
 
 	klog.Infof("deleted resources for tenant %s", tenantId)
@@ -375,24 +413,132 @@ func (tc *TenantController) syncResources(tenantId string) error {
 	return nil
 }
 
+func (tc *TenantController) syncClusterResourceQuota(tenantID string) error {
+	if tc.tenantClient == nil || tc.clusterquotaCli == nil {
+		klog.Warning("Skip synchronize cluster resource quota since nil tenant or clusterResourceQuota client.")
+		return nil
+	}
+	tenantQuotaName := fmt.Sprintf("%s-%s", common.TenantQuotaNamePrefix, tenantID)
+
+	tenant, err := tc.tenantClient.Tenants().Get(context.TODO(), tenantID, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			nerr := tc.tenantClient.Tenants().Delete(context.TODO(), tenantQuotaName, metav1.DeleteOptions{})
+			if apierrors.IsNotFound(nerr) {
+				// ignore notFound
+				nerr = nil
+			}
+			if nerr == nil {
+				klog.Infof("delete cluster resource quota (%v) successfully", tenantQuotaName)
+			}
+			return nerr
+		}
+		return err
+	}
+
+	if tenant.DeletionTimestamp != nil {
+		// skip sync, wait for cleanup
+		return nil
+	}
+
+	clusterquota, err := tc.clusterquotaCli.ClusterResourceQuotas().Get(context.TODO(), tenantQuotaName, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	expectedQuota := &quotav1alpha1.ClusterResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: tenantQuotaName,
+		},
+		Spec: quotav1alpha1.ClusterResourceQuotaSpec{
+			ResourceQuotaSpec: corev1.ResourceQuotaSpec{
+				Hard: tenant.Spec.Quota.Hard,
+			},
+			NamepsaceSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					common.TenantNamespaceLabelKey: tenantID,
+				},
+			},
+		},
+	}
+	if apierrors.IsNotFound(err) {
+		// create
+		_, err := tc.clusterquotaCli.ClusterResourceQuotas().Create(context.TODO(), expectedQuota, metav1.CreateOptions{})
+		return err
+	}
+
+	// update
+	if !reflect.DeepEqual(clusterquota.Spec.Hard, tenant.Spec.Quota.Hard) ||
+		!reflect.DeepEqual(clusterquota.Spec.NamepsaceSelector, expectedQuota.Spec.NamepsaceSelector) {
+		mutator := func(quota *quotav1alpha1.ClusterResourceQuota) error {
+			quota.Spec.Hard = tenant.Spec.Quota.Hard
+			quota.Spec.NamepsaceSelector = expectedQuota.Spec.NamepsaceSelector
+			return nil
+		}
+		//TODO: retry
+		return retry.RetryOnConflict(wait.Backoff{
+			Steps:    20,
+			Duration: 500 * time.Millisecond,
+			Factor:   1.0,
+			Jitter:   0.1},
+			func() error {
+				quota, err := tc.clusterquotaCli.ClusterResourceQuotas().Get(context.TODO(), tenantQuotaName, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				if err = mutator(quota); err != nil {
+					return errors.Wrap(err, "unable to mutate ClusterResourceQuotas")
+				}
+				_, err = tc.clusterquotaCli.ClusterResourceQuotas().Update(context.TODO(), quota, metav1.UpdateOptions{})
+				return err
+			},
+		)
+	}
+
+	// do nothing
+	return nil
+}
+
 // syncNamespaces synchronize the system namespaces to upstream cluster.
 func syncNamespaces(coreClient v1.CoreV1Interface, tenantId string) error {
 	systemNamespaces := []string{metav1.NamespaceSystem, metav1.NamespacePublic, corev1.NamespaceNodeLease, corev1.NamespaceDefault}
 
 	for _, systemNamespace := range systemNamespaces {
-		namespace := tenantId + "-" + systemNamespace
-
-		if _, err := coreClient.Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
-			newNamespace := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      namespace,
-					Namespace: "",
+		expectNamespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      tenantId + "-" + systemNamespace,
+				Namespace: "",
+				Labels: map[string]string{
+					common.TenantNamespaceLabelKey: tenantId,
 				},
+			},
+		}
+		ns, err := coreClient.Namespaces().Get(context.TODO(), expectNamespace.Name, metav1.GetOptions{})
+		if err != nil {
+			_, err = coreClient.Namespaces().Create(context.TODO(), expectNamespace, metav1.CreateOptions{})
+			if err == nil {
+				continue
 			}
+			if !apierrors.IsAlreadyExists(err) {
+				klog.Warningf("Failed to create the tenant namespace %s with error %v", expectNamespace.Name, err)
+				return err
+			}
+			// check namespaces's labels if it already exists
+			ns, err = coreClient.Namespaces().Get(context.TODO(), expectNamespace.Name, metav1.GetOptions{})
+			if err != nil {
+				klog.Warningf("Failed to get the tenant namespace %s with error %v", expectNamespace.Name, err)
+				return err
+			}
+		}
 
-			_, err = coreClient.Namespaces().Create(context.TODO(), newNamespace, metav1.CreateOptions{})
-			if err != nil && !apierrors.IsAlreadyExists(err) {
-				klog.Warningf("Failed to create the tenant namespace %s with error %v", namespace, err)
+		if ns.Labels == nil {
+			ns.Labels = make(map[string]string)
+		}
+		if ns.Labels[common.TenantNamespaceLabelKey] != tenantId {
+			ns.Labels[common.TenantNamespaceLabelKey] = tenantId
+			// TODO: retry on conflict
+			_, err := coreClient.Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
+			if err != nil {
+				klog.Warningf("Failed to update the tenant namespace %s with error %v", expectNamespace.Name, err)
 				return err
 			}
 		}

@@ -4,3 +4,7 @@ metadata:
   name: "111111"
 spec:
   id: 111111
+  quota:
+    hard:
+      cpu: "2"
+      memory: 2G

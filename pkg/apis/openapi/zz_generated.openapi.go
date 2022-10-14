@@ -32,7 +32,7 @@ import (
 	common "k8s.io/kube-openapi/pkg/common"
 	spec "k8s.io/kube-openapi/pkg/validation/spec"
 
-	zooapi "github.com/kubewharf/kubezoo/pkg/generated/openapi"
+	zooapi "github.com/kubewharf/kubezoo/pkg/apis/generated/openapi"
 )
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {

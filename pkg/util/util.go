@@ -230,60 +230,60 @@ func GetUnstructured(resource interface{}) (*unstructured.Unstructured, error) {
 }
 
 var groupKindNamespaced = map[metav1.GroupKind]bool{
-	metav1.GroupKind{"", "Binding"}:                                                    true,
-	metav1.GroupKind{"", "ComponentStatus"}:                                            false,
-	metav1.GroupKind{"", "ConfigMap"}:                                                  true,
-	metav1.GroupKind{"", "Endpoints"}:                                                  true,
-	metav1.GroupKind{"", "Event"}:                                                      true,
-	metav1.GroupKind{"", "LimitRange"}:                                                 true,
-	metav1.GroupKind{"", "Namespace"}:                                                  false,
-	metav1.GroupKind{"", "Node"}:                                                       false,
-	metav1.GroupKind{"", "PersistentVolumeClaim"}:                                      true,
-	metav1.GroupKind{"", "PersistentVolume"}:                                           false,
-	metav1.GroupKind{"", "Pod"}:                                                        true,
-	metav1.GroupKind{"", "PodTemplate"}:                                                true,
-	metav1.GroupKind{"", "ReplicationController"}:                                      true,
-	metav1.GroupKind{"", "ResourceQuota"}:                                              true,
-	metav1.GroupKind{"", "Secret"}:                                                     true,
-	metav1.GroupKind{"", "ServiceAccount"}:                                             true,
-	metav1.GroupKind{"", "Service"}:                                                    true,
-	metav1.GroupKind{"admissionregistration.k8s.io", "MutatingWebhookConfiguration"}:   false,
-	metav1.GroupKind{"admissionregistration.k8s.io", "ValidatingWebhookConfiguration"}: false,
-	metav1.GroupKind{"apiextensions.k8s.io", "CustomResourceDefinition"}:               false,
-	metav1.GroupKind{"apps", "ControllerRevision"}:                                     true,
-	metav1.GroupKind{"apps", "DaemonSet"}:                                              true,
-	metav1.GroupKind{"apps", "Deployment"}:                                             true,
-	metav1.GroupKind{"apps", "ReplicaSet"}:                                             true,
-	metav1.GroupKind{"apps", "StatefulSet"}:                                            true,
-	metav1.GroupKind{"authentication.k8s.io", "TokenReview"}:                           false,
-	metav1.GroupKind{"authorization.k8s.io", "LocalSubjectAccessReview"}:               true,
-	metav1.GroupKind{"authorization.k8s.io", "SelfSubjectAccessReview"}:                false,
-	metav1.GroupKind{"authorization.k8s.io", "SelfSubjectRulesReview"}:                 false,
-	metav1.GroupKind{"authorization.k8s.io", "SubjectAccessReview"}:                    false,
-	metav1.GroupKind{"autoscaling", "HorizontalPodAutoscaler"}:                         true,
-	metav1.GroupKind{"autoscaling", "Scale"}:                                           true,
-	metav1.GroupKind{"batch", "CronJob"}:                                               true,
-	metav1.GroupKind{"batch", "Job"}:                                                   true,
-	metav1.GroupKind{"certificates.k8s.io", "CertificateSigningRequest"}:               false,
-	metav1.GroupKind{"coordination.k8s.io", "Lease"}:                                   true,
-	metav1.GroupKind{"discovery.k8s.io", "EndpointSlice"}:                              true,
-	metav1.GroupKind{"events.k8s.io", "Event"}:                                         true,
-	metav1.GroupKind{"extensions", "Ingress"}:                                          true,
-	metav1.GroupKind{"networking.k8s.io", "IngressClass"}:                              false,
-	metav1.GroupKind{"networking.k8s.io", "Ingress"}:                                   true,
-	metav1.GroupKind{"networking.k8s.io", "NetworkPolicy"}:                             true,
-	metav1.GroupKind{"node.k8s.io", "RuntimeClass"}:                                    false,
-	metav1.GroupKind{"policy", "PodDisruptionBudget"}:                                  true,
-	metav1.GroupKind{"policy", "PodSecurityPolicy"}:                                    false,
-	metav1.GroupKind{"rbac.authorization.k8s.io", "ClusterRoleBinding"}:                false,
-	metav1.GroupKind{"rbac.authorization.k8s.io", "ClusterRole"}:                       false,
-	metav1.GroupKind{"rbac.authorization.k8s.io", "RoleBinding"}:                       true,
-	metav1.GroupKind{"rbac.authorization.k8s.io", "Role"}:                              true,
-	metav1.GroupKind{"scheduling.k8s.io", "PriorityClass"}:                             false,
-	metav1.GroupKind{"storage.k8s.io", "CSIDriver"}:                                    false,
-	metav1.GroupKind{"storage.k8s.io", "CSINode"}:                                      false,
-	metav1.GroupKind{"storage.k8s.io", "StorageClass"}:                                 false,
-	metav1.GroupKind{"storage.k8s.io", "VolumeAttachment"}:                             false,
+	{Group: "", Kind: "Binding"}:                                                    true,
+	{Group: "", Kind: "ComponentStatus"}:                                            false,
+	{Group: "", Kind: "ConfigMap"}:                                                  true,
+	{Group: "", Kind: "Endpoints"}:                                                  true,
+	{Group: "", Kind: "Event"}:                                                      true,
+	{Group: "", Kind: "LimitRange"}:                                                 true,
+	{Group: "", Kind: "Namespace"}:                                                  false,
+	{Group: "", Kind: "Node"}:                                                       false,
+	{Group: "", Kind: "PersistentVolumeClaim"}:                                      true,
+	{Group: "", Kind: "PersistentVolume"}:                                           false,
+	{Group: "", Kind: "Pod"}:                                                        true,
+	{Group: "", Kind: "PodTemplate"}:                                                true,
+	{Group: "", Kind: "ReplicationController"}:                                      true,
+	{Group: "", Kind: "ResourceQuota"}:                                              true,
+	{Group: "", Kind: "Secret"}:                                                     true,
+	{Group: "", Kind: "ServiceAccount"}:                                             true,
+	{Group: "", Kind: "Service"}:                                                    true,
+	{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration"}:   false,
+	{Group: "admissionregistration.k8s.io", Kind: "ValidatingWebhookConfiguration"}: false,
+	{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}:               false,
+	{Group: "apps", Kind: "ControllerRevision"}:                                     true,
+	{Group: "apps", Kind: "DaemonSet"}:                                              true,
+	{Group: "apps", Kind: "Deployment"}:                                             true,
+	{Group: "apps", Kind: "ReplicaSet"}:                                             true,
+	{Group: "apps", Kind: "StatefulSet"}:                                            true,
+	{Group: "authentication.k8s.io", Kind: "TokenReview"}:                           false,
+	{Group: "authorization.k8s.io", Kind: "LocalSubjectAccessReview"}:               true,
+	{Group: "authorization.k8s.io", Kind: "SelfSubjectAccessReview"}:                false,
+	{Group: "authorization.k8s.io", Kind: "SelfSubjectRulesReview"}:                 false,
+	{Group: "authorization.k8s.io", Kind: "SubjectAccessReview"}:                    false,
+	{Group: "autoscaling", Kind: "HorizontalPodAutoscaler"}:                         true,
+	{Group: "autoscaling", Kind: "Scale"}:                                           true,
+	{Group: "batch", Kind: "CronJob"}:                                               true,
+	{Group: "batch", Kind: "Job"}:                                                   true,
+	{Group: "certificates.k8s.io", Kind: "CertificateSigningRequest"}:               false,
+	{Group: "coordination.k8s.io", Kind: "Lease"}:                                   true,
+	{Group: "discovery.k8s.io", Kind: "EndpointSlice"}:                              true,
+	{Group: "events.k8s.io", Kind: "Event"}:                                         true,
+	{Group: "extensions", Kind: "Ingress"}:                                          true,
+	{Group: "networking.k8s.io", Kind: "IngressClass"}:                              false,
+	{Group: "networking.k8s.io", Kind: "Ingress"}:                                   true,
+	{Group: "networking.k8s.io", Kind: "NetworkPolicy"}:                             true,
+	{Group: "node.k8s.io", Kind: "RuntimeClass"}:                                    false,
+	{Group: "policy", Kind: "PodDisruptionBudget"}:                                  true,
+	{Group: "policy", Kind: "PodSecurityPolicy"}:                                    false,
+	{Group: "rbac.authorization.k8s.io", Kind: "ClusterRoleBinding"}:                false,
+	{Group: "rbac.authorization.k8s.io", Kind: "ClusterRole"}:                       false,
+	{Group: "rbac.authorization.k8s.io", Kind: "RoleBinding"}:                       true,
+	{Group: "rbac.authorization.k8s.io", Kind: "Role"}:                              true,
+	{Group: "scheduling.k8s.io", Kind: "PriorityClass"}:                             false,
+	{Group: "storage.k8s.io", Kind: "CSIDriver"}:                                    false,
+	{Group: "storage.k8s.io", Kind: "CSINode"}:                                      false,
+	{Group: "storage.k8s.io", Kind: "StorageClass"}:                                 false,
+	{Group: "storage.k8s.io", Kind: "VolumeAttachment"}:                             false,
 }
 
 // IsGroupKindNamespaced check the kind is namespace scoped or not.
@@ -349,7 +349,23 @@ func NewCheckGroupKindFunc(crdLister v1.CustomResourceDefinitionLister) CheckGro
 				return crd.Spec.Scope == extensionsv1.NamespaceScoped, true, nil
 			}
 		}
-		return false, false, fmt.Errorf("unregistered group: %s, kind: %s", group, kind)
+		// TODO: temporary fix for system crd
+		if isTenantObject {
+			// try to find system crd
+			group = TrimTenantIDPrefix(tenantID, group)
+			allCRDs, err := crdLister.List(labels.Everything())
+			if err != nil {
+				return false, false, err
+			}
+			for _, crd := range allCRDs {
+				if crd.Spec.Group == group && crd.Spec.Names.Kind == kind {
+					// system crds should be treated as custom resource for tenant
+					return crd.Spec.Scope == extensionsv1.NamespaceScoped, false, nil
+				}
+			}
+		}
+
+		return false, false, fmt.Errorf("unregistered crd group: %s, kind: %s", group, kind)
 	}
 }
 
