@@ -16,17 +16,19 @@
 
 set -xue
 
-readonly TEMP_DIR=$(mktemp -d)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE}")/../.." && pwd -P)"
+CONTEXT_NAME=$(kubectl config current-context)
+if [ ${CONTEXT_NAME::5} != "kind-" ]; then
+     echo "Current kubectl context is not a kind cluster" >&2
+     exit 1
+fi
+KIND_SERVER="$(yq eval '.clusters.[]|select(.name=="'${CONTEXT_NAME}'")|.cluster.server' ~/.kube/config)"
+readonly TEMP_DIR=$REPO_ROOT/_output
 readonly UPSTREAM_DIR=$TEMP_DIR/upstream
 readonly KUBEZOO_DIR=$TEMP_DIR/kubezoo
 
 get_upstream_pki_kind() {
-    local context_name=$(kubectl config current-context)
-    if [ ${context_name::5} != "kind-" ]; then
-        echo "Current kubectl context is not a kind cluster" >&2
-        exit 1
-    fi
-    local kind_cluster_name=${context_name:5}
+    local kind_cluster_name=${CONTEXT_NAME:5}
     local kind_docker=$(docker ps --filter "name=${kind_cluster_name}-control-plane" --format "{{.ID}}")
 
     [ -z $UPSTREAM_DIR ] || mkdir -p $UPSTREAM_DIR
@@ -34,11 +36,11 @@ get_upstream_pki_kind() {
     docker cp $kind_docker:/etc/kubernetes/pki/sa.key $UPSTREAM_DIR/sa.key
     docker cp $kind_docker:/etc/kubernetes/pki/apiserver.crt $UPSTREAM_DIR/apiserver.crt
     docker cp $kind_docker:/etc/kubernetes/pki/apiserver.key $UPSTREAM_DIR/apiserver.key
-    yq eval '.users.[]|select(.name=="'${context_name}'")|.user.client-certificate-data' ~/.kube/config | base64 \
+    yq eval '.users.[]|select(.name=="'${CONTEXT_NAME}'")|.user.client-certificate-data' ~/.kube/config | base64 \
         --decode > $UPSTREAM_DIR/client.crt
-    yq eval '.users.[]|select(.name=="'${context_name}'")|.user.client-key-data' ~/.kube/config | base64 \
+    yq eval '.users.[]|select(.name=="'${CONTEXT_NAME}'")|.user.client-key-data' ~/.kube/config | base64 \
         --decode > $UPSTREAM_DIR/client-key.crt
-    yq eval '.clusters.[]|select(.name=="'${context_name}'")|.cluster.certificate-authority-data' \
+    yq eval '.clusters.[]|select(.name=="'${CONTEXT_NAME}'")|.cluster.certificate-authority-data' \
         ~/.kube/config | base64 --decode > $UPSTREAM_DIR/ca.crt
 }
 
@@ -180,6 +182,44 @@ set_context() {
       --user=zoo-admin
 }
 
+kubezoo_parametes="
+
+--allow-privileged=true \
+--apiserver-count=1 \
+--cors-allowed-origins=.* \
+--delete-collection-workers=1 \
+--etcd-prefix=/zoo \
+--etcd-servers=http://localhost:2379 \
+--event-ttl=1h0m0s \
+--logtostderr=true \
+--max-requests-inflight=1002 \
+--service-cluster-ip-range=192.168.0.1/16 \
+--service-node-port-range=20000-32767 \
+--storage-backend=etcd3 \
+--authorization-mode=AlwaysAllow \
+--client-ca-file=$KUBEZOO_DIR/ca.pem \
+--client-ca-key-file=$KUBEZOO_DIR/ca-key.pem \
+--tls-cert-file=$KUBEZOO_DIR/kubernetes.pem \
+--tls-private-key-file=$KUBEZOO_DIR/kubernetes-key.pem \
+--service-account-key-file=$UPSTREAM_DIR/sa.pub \
+--service-account-issuer=foo \
+--service-account-signing-key-file=$UPSTREAM_DIR/sa.key \
+--proxy-client-cert-file=$UPSTREAM_DIR/client.crt \
+--proxy-client-key-file=$UPSTREAM_DIR/client-key.crt \
+--proxy-client-ca-file=$UPSTREAM_DIR/ca.crt \
+--request-timeout=10m \
+--watch-cache=true \
+--proxy-upstream-master=$KIND_SERVER \
+--service-account-lookup=false \
+--proxy-bind-address=127.0.0.1 \
+--proxy-secure-port=6443 \
+--api-audiences=foo
+"
+
+print_kubezoo_parameters() {
+  echo "$kubezoo_parametes"
+}
+
 gen_pki_setup_ctx() {
     get_upstream_pki_kind
     gen_kubezoo_pki
@@ -187,4 +227,11 @@ gen_pki_setup_ctx() {
     set_context
 }
 
-gen_pki_setup_ctx
+gen_pki_setup_ctx_print_parameters() {
+  get_upstream_pki_kind
+  gen_kubezoo_pki
+  set_context
+  print_kubezoo_parameters
+}
+
+"$@"
