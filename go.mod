@@ -7,6 +7,7 @@ require (
 	github.com/go-openapi/spec v0.19.5
 	github.com/go-test/deep v1.0.8
 	github.com/gogo/protobuf v1.3.2
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
