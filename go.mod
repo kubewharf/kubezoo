@@ -4,12 +4,11 @@ go 1.14
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/go-openapi/spec v0.19.5
 	github.com/go-test/deep v1.0.8
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/gnostic v0.5.7-v3refs
-	github.com/onsi/ginkgo v1.16.1
-	github.com/onsi/gomega v1.11.0
+	github.com/onsi/ginkgo v1.16.5
+	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
@@ -32,7 +31,7 @@ require (
 	k8s.io/pod-security-admission v0.24.0 // indirect
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	sigs.k8s.io/apiserver-runtime v1.0.2
-	sigs.k8s.io/controller-runtime v0.6.0
+	sigs.k8s.io/controller-runtime v0.12.0
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1
 )
 

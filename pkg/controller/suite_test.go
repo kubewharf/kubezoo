@@ -22,13 +22,13 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -50,7 +50,8 @@ var (
 	ctx                 context.Context
 	cancel              context.CancelFunc
 
-	testTenantName = "kubezoo-controller-test"
+	testTenantName         = "kubezoo-controller-test"
+	xPreserveUnknownFields = true
 )
 
 func TestTenantController(t *testing.T) {
@@ -66,7 +67,7 @@ var _ = BeforeSuite(func() {
 
 	// create control plane env
 	controlPlaneTestEnv = &envtest.Environment{
-		CRDs: []runtime.Object{tenantCRD},
+		CRDs: []*apiextensionsv1.CustomResourceDefinition{tenantCRD},
 	}
 
 	// start control plane
@@ -93,6 +94,12 @@ var _ = BeforeSuite(func() {
 	tempDir, err := os.MkdirTemp("", "kubezoo")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(tempDir).NotTo(BeEmpty())
+
+	// trim the prefix "https://" and the suffix "/"
+	// because the Host in a kubeconfig is like "https://127.0.0.1:6443/"
+	// and the parameter of func net.SplitHostPort() should be a domain name, an IPv4 or IPv6 address with port only, not a URL.
+	upstreamCfg.Host = strings.TrimPrefix(upstreamCfg.Host, "https://")
+	upstreamCfg.Host = strings.TrimSuffix(upstreamCfg.Host, "/")
 
 	// generate client ca key and cert for upstream cluster
 	host, port, err := net.SplitHostPort(upstreamCfg.Host)
@@ -128,25 +135,52 @@ var _ = AfterSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 })
 
-// use v1beta1 to bypass the openapi schema check
-var tenantCRD = &apiextensionsv1beta1.CustomResourceDefinition{
+var tenantCRD = &apiextensionsv1.CustomResourceDefinition{
 	ObjectMeta: metav1.ObjectMeta{
 		Name: "tenants." + tenantv1alpha1.SchemeGroupVersion.Group,
 	},
-	Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
+	Spec: apiextensionsv1.CustomResourceDefinitionSpec{
 		Group: tenantv1alpha1.SchemeGroupVersion.Group,
-		Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
+		Names: apiextensionsv1.CustomResourceDefinitionNames{
 			Kind:     "Tenant",
 			ListKind: "TenantList",
 			Plural:   "tenants",
 			Singular: "tenant",
 		},
-		Scope: apiextensionsv1beta1.ClusterScoped,
-		Versions: []apiextensionsv1beta1.CustomResourceDefinitionVersion{
+		Scope: apiextensionsv1.ClusterScoped,
+		Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
 			{
 				Name:    "v1alpha1",
 				Served:  true,
 				Storage: true,
+				Schema: &apiextensionsv1.CustomResourceValidation{
+					OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+						Properties: map[string]apiextensionsv1.JSONSchemaProps{
+							"apiVersion": {
+								Type: "string",
+							},
+							"kind": {
+								Type: "string",
+							},
+							"metadata": {
+								Type: "object",
+							},
+							"spec": {
+								Type:                   "object",
+								XPreserveUnknownFields: &xPreserveUnknownFields,
+							},
+							"status": {
+								Type:                   "object",
+								XPreserveUnknownFields: &xPreserveUnknownFields,
+							},
+						},
+						Required: []string{
+							"metadata",
+							"spec",
+						},
+						Type: "object",
+					},
+				},
 			},
 		},
 	},
