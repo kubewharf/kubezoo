@@ -29,10 +29,12 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclient "k8s.io/client-go/kubernetes/typed/rbac/v1"
@@ -44,6 +46,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	rbacv1helpers "k8s.io/kubernetes/pkg/apis/rbac/v1"
 
+	"github.com/kubewharf/kubezoo/pkg/dynamic"
 	tenantclient "github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned/typed/tenant/v1alpha1"
 	tenantlister "github.com/kubewharf/kubezoo/pkg/generated/listers/tenant/v1alpha1"
 	"github.com/kubewharf/kubezoo/pkg/util"
@@ -52,11 +55,17 @@ import (
 type EventType int
 
 const (
-	Create = iota
+	Add = iota
+	Update
 	Delete
 )
 
-const maxRetries = 10
+const (
+	maxRetries         = 10
+	tenantFinalizerKey = "kubezoo.io/tenant"
+	verbList           = "list"
+	verbDelete         = "delete"
+)
 
 // Event indicate the informerEvent
 type Event struct {
@@ -67,19 +76,22 @@ type Event struct {
 // TenantController take responsibility for tenant management including
 // the tenant object, tenant certificate and the tenant's k8s resources.
 type TenantController struct {
-	queue              workqueue.RateLimitingInterface
-	tenantInformer     cache.SharedIndexInformer
-	tenantLister       tenantlister.TenantLister
-	tenantClient       tenantclient.TenantV1alpha1Interface
-	upstreamCoreClient v1.CoreV1Interface
-	upstreamRbacClient rbacclient.RbacV1Interface
-	clientCAFile       string
-	clientCAKeyFile    string
-	kubeZooHostAddress string
+	queue                   workqueue.RateLimitingInterface
+	tenantInformer          cache.SharedIndexInformer
+	tenantLister            tenantlister.TenantLister
+	tenantClient            tenantclient.TenantV1alpha1Interface
+	upstreamCoreClient      v1.CoreV1Interface
+	upstreamRbacClient      rbacclient.RbacV1Interface
+	upstreamDiscoveryClient *discovery.DiscoveryClient
+	upstreamDynamicClient   dynamic.Interface
+	upstreamCRDClient       *apiextensions.Clientset
+	clientCAFile            string
+	clientCAKeyFile         string
+	kubeZooHostAddress      string
 }
 
 // newTenantController create a controller to handler the events of tenant.
-func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, coreCli v1.CoreV1Interface, rbacCli rbacclient.RbacV1Interface, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) *TenantController {
+func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, coreCli v1.CoreV1Interface, rbacCli rbacclient.RbacV1Interface, discoveryCli *discovery.DiscoveryClient, dynamicCli dynamic.Interface, crdClient *apiextensions.Clientset, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) *TenantController {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	var (
 		newEvent Event
@@ -89,7 +101,14 @@ func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.Te
 		AddFunc: func(obj interface{}) {
 			newEvent.tenantId, err = cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
-				newEvent.eventType = Create
+				newEvent.eventType = Add
+				queue.Add(newEvent)
+			}
+		},
+		UpdateFunc: func(_, new interface{}) {
+			newEvent.tenantId, err = cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				newEvent.eventType = Update
 				queue.Add(newEvent)
 			}
 		},
@@ -103,21 +122,24 @@ func newTenantController(ti cache.SharedIndexInformer, tenantCli tenantclient.Te
 	})
 
 	return &TenantController{
-		queue:              queue,
-		tenantInformer:     ti,
-		tenantLister:       tenantlister.NewTenantLister(ti.GetIndexer()),
-		tenantClient:       tenantCli,
-		upstreamCoreClient: coreCli,
-		upstreamRbacClient: rbacCli,
-		clientCAFile:       clientCAFile,
-		clientCAKeyFile:    clientCAKeyFile,
-		kubeZooHostAddress: net.JoinHostPort(kubeZooBindAddress, strconv.Itoa(kubeZooSecurePort)),
+		queue:                   queue,
+		tenantInformer:          ti,
+		tenantLister:            tenantlister.NewTenantLister(ti.GetIndexer()),
+		tenantClient:            tenantCli,
+		upstreamCoreClient:      coreCli,
+		upstreamRbacClient:      rbacCli,
+		upstreamDiscoveryClient: discoveryCli,
+		upstreamDynamicClient:   dynamicCli,
+		upstreamCRDClient:       crdClient,
+		clientCAFile:            clientCAFile,
+		clientCAKeyFile:         clientCAKeyFile,
+		kubeZooHostAddress:      net.JoinHostPort(kubeZooBindAddress, strconv.Itoa(kubeZooSecurePort)),
 	}
 }
 
 // Run starts the tenant controller
-func Run(stopCh <-chan struct{}, ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, typedCli kubernetes.Interface, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) {
-	tc := newTenantController(ti, tenantCli, typedCli.CoreV1(), typedCli.RbacV1(), clientCAFile, clientCAKeyFile, kubeZooBindAddress, kubeZooSecurePort)
+func Run(stopCh <-chan struct{}, ti cache.SharedIndexInformer, tenantCli tenantclient.TenantV1alpha1Interface, typedCli kubernetes.Interface, discoveryCli *discovery.DiscoveryClient, dynamicCli dynamic.Interface, crdClient *apiextensions.Clientset, clientCAFile, clientCAKeyFile, kubeZooBindAddress string, kubeZooSecurePort int) {
+	tc := newTenantController(ti, tenantCli, typedCli.CoreV1(), typedCli.RbacV1(), discoveryCli, dynamicCli, crdClient, clientCAFile, clientCAKeyFile, kubeZooBindAddress, kubeZooSecurePort)
 	defer utilruntime.HandleCrash()
 	defer tc.queue.ShutDown()
 
@@ -176,50 +198,142 @@ func (tc *TenantController) processNextItem() bool {
 func (tc *TenantController) processItem(e Event) error {
 	// process events based on its type
 	switch e.eventType {
-	case Create:
-		return tc.syncResources(e.tenantId)
+	case Add, Update:
+		return tc.onTenantAddOrUpdate(e.tenantId)
 	case Delete:
 		klog.Warningf("deleting tenant %v", e.tenantId)
-		return tc.deleteResources(e.tenantId)
+		return nil
 	}
 	return nil
 }
 
+// onTenantAddOrUpdate handles the ADD or UPDATE event of a Tenant.
+func (tc *TenantController) onTenantAddOrUpdate(tenantId string) error {
+	tenant, err := tc.tenantClient.Tenants().Get(context.TODO(), tenantId, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	if tenant.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !util.ContainString(tenant.ObjectMeta.Finalizers, tenantFinalizerKey) {
+			tenant.ObjectMeta.Finalizers = append(tenant.ObjectMeta.Finalizers, tenantFinalizerKey)
+			if _, err := tc.tenantClient.Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{}); err != nil {
+				return err
+			}
+		}
+	} else {
+		if util.ContainString(tenant.ObjectMeta.Finalizers, tenantFinalizerKey) {
+			if err = tc.deleteResources(tenantId); err != nil {
+				return err
+			}
+			tenant.ObjectMeta.Finalizers = util.RemoveString(tenant.ObjectMeta.Finalizers, tenantFinalizerKey)
+			if _, err = tc.tenantClient.Tenants().Update(context.TODO(), tenant, metav1.UpdateOptions{}); err != nil {
+				if apierrors.IsNotFound(err) {
+					return nil
+				}
+				return err
+			}
+		}
+		return nil
+	}
+
+	return tc.syncResources(tenantId)
+}
+
 // deleteResources deletes resources belonging to the tenant from the upstream cluster.
-// TODO delete all cluster-scoped resources belonging to the tenant.
 func (tc *TenantController) deleteResources(tenantId string) error {
-	if tc.upstreamCoreClient == nil || tc.upstreamRbacClient == nil {
-		return errors.New("Can't delete namespaces or RBAC resources with nil client.")
-	}
 	klog.V(4).Infof("delete resources for tenant %s", tenantId)
-	if err := deleteNamespaces(tc.upstreamCoreClient, tenantId); err != nil {
-		return errors.Errorf("fail to delete namespaces for tenant %s: %v", tenantId, err)
+
+	clusterScopedResources, err := tc.getClusterScopedResources()
+	if err != nil {
+		return err
+	}
+	if err := tc.deleteCRDs(tenantId); err != nil {
+		return err
+	}
+	nonCRDResources := tc.filterCRDs(clusterScopedResources)
+	if err := tc.deleteNonCRDClusterScopedResources(tenantId, nonCRDResources); err != nil {
+		return err
 	}
 
-	if err := deleteClusterRoles(tc.upstreamRbacClient, tenantId); err != nil {
-		return errors.Errorf("fail to delete clusterroles for tenant %s: %v", tenantId, err)
-	}
-
-	if err := deleteClusterRoleBindings(tc.upstreamRbacClient, tenantId); err != nil {
-		return errors.Errorf("fail to delete clusterrolebindings for tenant %s: %v", tenantId, err)
-	}
 	klog.Infof("deleted resources for tenant %s", tenantId)
 	return nil
 }
 
-// deleteNamespaces deletes namespaces belonging to the tenant.
-func deleteNamespaces(coreClient v1.CoreV1Interface, tenantId string) error {
-	// get all namespaces belonging to the tenant
-	nsList, err := coreClient.Namespaces().List(context.TODO(), metav1.ListOptions{})
+// genClusterScopedResourceList generates the list of the cluster-scoped resources.
+func (tc *TenantController) getClusterScopedResources() ([]metav1.APIResource, error) {
+	_, apiResourceLists, err := tc.upstreamDiscoveryClient.ServerGroupsAndResources()
 	if err != nil {
-		return errors.Wrap(err, "fail to list namespaces")
+		return nil, err
 	}
 
-	tenantPrefix := tenantId + "-"
-	for _, ns := range nsList.Items {
-		if strings.HasPrefix(ns.Name, tenantPrefix) {
-			if err := coreClient.Namespaces().Delete(context.TODO(), ns.Name, metav1.DeleteOptions{}); err != nil {
-				return errors.Wrap(err, "fail to delete the namespace")
+	clusterScopedLists := discovery.FilteredBy(
+		discovery.ResourcePredicateFunc(
+			func(gv string, r *metav1.APIResource) bool {
+				return !r.Namespaced
+			},
+		), apiResourceLists)
+
+	return util.FlattenResourceLists(clusterScopedLists), nil
+}
+
+// deleteCRDs delete all crds belong to the tenant.
+// NOTE: when a CRD is deleted, all its associated CRs will be removed automatically.
+func (tc *TenantController) deleteCRDs(tenantId string) error {
+	crdList, err := tc.upstreamCRDClient.ApiextensionsV1().CustomResourceDefinitions().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	for _, crd := range crdList.Items {
+		if strings.HasPrefix(crd.Spec.Group, tenantId) {
+			if err = tc.upstreamCRDClient.ApiextensionsV1().CustomResourceDefinitions().Delete(context.TODO(), crd.GetName(), metav1.DeleteOptions{}); err != nil {
+				if apierrors.IsNotFound(err) {
+					continue
+				}
+				return err
+			}
+			klog.Infof("delete crd(%s) for tenant %s", crd.GetName(), tenantId)
+			continue
+		}
+		klog.V(4).Infof("crd(%s) does not belong to tenant %s", crd.GetName(), tenantId)
+	}
+
+	return nil
+}
+
+// deleteNonCRDClusterScopedResources delete all non-crd resources belong to the tenant.
+func (tc *TenantController) deleteNonCRDClusterScopedResources(tenantId string, nonCRDAPIResources []metav1.APIResource) error {
+	for _, apiResource := range nonCRDAPIResources {
+		if !util.ContainString(apiResource.Verbs, verbList) || !util.ContainString(apiResource.Verbs, verbDelete) {
+			continue
+		}
+
+		gvr := util.GetGVR(apiResource)
+		rClient := tc.upstreamDynamicClient.Resource(gvr)
+
+		resourceList, err := rClient.List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return err
+		}
+
+		for _, resource := range resourceList.Items {
+			if strings.HasPrefix(resource.GetName(), tenantId) {
+				if _, _, err = rClient.Delete(context.TODO(), resource.GetName(), metav1.DeleteOptions{}); err != nil {
+					if apierrors.IsNotFound(err) {
+						continue
+					}
+					return err
+				}
+				klog.Infof("delete cluster-scoped resource (%s) for tenant %s", resource.GetName(), tenantId)
+			} else {
+				klog.V(4).Infof("cluster-scoped resource (%s) does not belong to tenant %s", resource.GetName(), tenantId)
 			}
 		}
 	}
@@ -227,44 +341,16 @@ func deleteNamespaces(coreClient v1.CoreV1Interface, tenantId string) error {
 	return nil
 }
 
-// deleteClusterRoles deletes clusterroles belonging to the tenant.
-func deleteClusterRoles(rbacClient rbacclient.RbacV1Interface, tenantId string) error {
-	// get all clusterroles belonging to the tenant
-	crList, err := rbacClient.ClusterRoles().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return errors.Wrap(err, "fail to list clusterroles")
-	}
-
-	tenantPrefix := tenantId + "-"
-	for _, cr := range crList.Items {
-		if strings.HasPrefix(cr.Name, tenantPrefix) {
-			if err := rbacClient.ClusterRoles().Delete(context.TODO(), cr.Name, metav1.DeleteOptions{}); err != nil {
-				return errors.Wrap(err, "fail to delete the clusterrole")
-			}
+// filterCRDs split cluster-scoped resources to CRDs and non-CRDs.
+func (tc *TenantController) filterCRDs(clusterScopedAPIResources []metav1.APIResource) []metav1.APIResource {
+	nonCRDs := make([]metav1.APIResource, 0, len(clusterScopedAPIResources))
+	for _, resource := range clusterScopedAPIResources {
+		if !util.IsCRD(resource) {
+			nonCRDs = append(nonCRDs, resource)
 		}
 	}
 
-	return nil
-}
-
-// deleteClusterRoleBindings deletes clusterrolebindings belonging to the tenant.
-func deleteClusterRoleBindings(rbacClient rbacclient.RbacV1Interface, tenantId string) error {
-	// get all clusterrolebindings belonging to the tenant
-	crbList, err := rbacClient.ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return errors.Wrap(err, "fail to list clusterrolebindings")
-	}
-
-	tenantPrefix := tenantId + "-"
-	for _, crb := range crbList.Items {
-		if strings.HasPrefix(crb.Name, tenantPrefix) {
-			if err := rbacClient.ClusterRoleBindings().Delete(context.TODO(), crb.Name, metav1.DeleteOptions{}); err != nil {
-				return errors.Wrap(err, "fail to delete the clusterrolebinding")
-			}
-		}
-	}
-
-	return nil
+	return nonCRDs
 }
 
 // syncResources sync system resources to the upstream cluster when new tenant is being created.
