@@ -18,14 +18,15 @@ package proxy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	openapi_v2 "github.com/google/gnostic/openapiv2"
 	v1 "k8s.io/apiextensions-apiserver/pkg/client/listers/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
-
-	openapi_v2 "github.com/google/gnostic/openapiv2"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/kubewharf/kubezoo/pkg/util"
 )
@@ -42,6 +43,8 @@ type DiscoveryProxy interface {
 	ServerVersion() (*version.Info, error)
 	// OpenAPISchema fetches the open api schema using a rest client and parses the proto.
 	OpenAPISchema() (*openapi_v2.Document, error)
+	// GetSwagger fetches swagger API specification
+	GetSwagger() (*spec.Swagger, error)
 }
 
 // discoveryProxy implements the DiscoveryProxy interface
@@ -156,4 +159,16 @@ func (dp *discoveryProxy) ServerVersion() (*version.Info, error) {
 
 func (dp *discoveryProxy) OpenAPISchema() (*openapi_v2.Document, error) {
 	return dp.discoveryClient.OpenAPISchema()
+}
+
+func (dp *discoveryProxy) GetSwagger() (*spec.Swagger, error) {
+	data, err := dp.discoveryClient.RESTClient().Get().AbsPath("/openapi/v2").Do(context.TODO()).Raw()
+	if err != nil {
+		return nil, err
+	}
+	spec := &spec.Swagger{}
+	if err = json.Unmarshal(data, spec); err != nil {
+		return nil, err
+	}
+	return spec, nil
 }

@@ -21,11 +21,17 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/kubewharf/kubezoo/pkg/proxy"
 	"github.com/kubewharf/kubezoo/pkg/util"
+)
+
+const (
+	// protobuf mime type
+	openAPIV2mimePb = "application/com.github.proto-openapi.spec.v2@v1.0+protobuf"
 )
 
 // WithDiscoveryProxy creates an http handler that proxy tenant discovery request
@@ -76,13 +82,46 @@ func WithDiscoveryProxy(handler http.Handler, discoveryProxy proxy.DiscoveryProx
 			}
 			responseJson(w, version)
 			return
-		} else if path == "/openapi/v2" || path == "/swagger-2.0.0.pb-v1" {
-			doc, err := discoveryProxy.OpenAPISchema()
+		} else if path == "openapi/v2" || path == "swagger-2.0.0.pb-v1" {
+			if r.Header.Get("Accept") == openAPIV2mimePb {
+				doc, err := discoveryProxy.OpenAPISchema()
+				if err != nil {
+					responseDiscoveryError(w, err)
+					return
+				}
+				docJson, err := json.Marshal(doc)
+				if err != nil {
+					responseDiscoveryError(w, err)
+					return
+				}
+				newJson := strings.ReplaceAll(string(docJson), tenantID+"-", "")
+				if err := json.Unmarshal([]byte(newJson), doc); err != nil {
+					responseDiscoveryError(w, err)
+					return
+				}
+
+				bytes, err := proto.Marshal(doc)
+				if err != nil {
+					responseDiscoveryError(w, err)
+					return
+				}
+				w.Write(bytes)
+				return
+			}
+
+			swagger, err := discoveryProxy.GetSwagger()
 			if err != nil {
 				responseDiscoveryError(w, err)
 				return
 			}
-			responseJson(w, doc)
+			for key, schema := range swagger.SwaggerProps.Definitions {
+				if strings.Contains(key, tenantID+"-") {
+					delete(swagger.SwaggerProps.Definitions, key)
+					newKey := strings.ReplaceAll(key, tenantID+"-", "")
+					swagger.SwaggerProps.Definitions[newKey] = schema
+				}
+			}
+			responseJson(w, swagger)
 			return
 		}
 	})
@@ -124,7 +163,7 @@ func isDiscoveryRequest(requestInfo *request.RequestInfo) bool {
 		return true
 	}
 	switch requestInfo.Path {
-	case "version", "openapi/v2", "swagger-2.0.0.pb-v1":
+	case "/version", "/openapi/v2", "/swagger-2.0.0.pb-v1":
 		return true
 	}
 	return false
