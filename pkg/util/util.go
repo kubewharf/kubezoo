@@ -413,3 +413,67 @@ func (l *FakeCRDLister) List(selector labels.Selector) (ret []*apiextensionsv1.C
 func (l *FakeCRDLister) Get(name string) (*apiextensionsv1.CustomResourceDefinition, error) {
 	return nil, nil
 }
+
+// GetGVR returns the corresponding GVR for the given APIResource.
+func GetGVR(rsrc metav1.APIResource) schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    rsrc.Group,
+		Version:  rsrc.Version,
+		Resource: rsrc.Name,
+	}
+}
+
+// IsCRD checks if the given APIResource is the CRD.
+func IsCRD(r metav1.APIResource) bool {
+	return r.Group == "apiextensions.k8s.io" &&
+		r.Name == "customresourcedefinitions"
+}
+
+// FlattenResourceLists flattens the given nested list and return a list of resources.
+func FlattenResourceLists(resourceLists []*metav1.APIResourceList) (ret []metav1.APIResource) {
+	for _, resourceList := range resourceLists {
+		for _, resource := range resourceList.APIResources {
+			group, version := splitGV(resourceList.GroupVersion)
+			resource.Group = group
+			resource.Version = version
+			ret = append(ret, resource)
+		}
+	}
+	return
+}
+
+// splitGV splits the GroupVersion string (group/version).
+func splitGV(GV string) (group, version string) {
+	tks := strings.Split(GV, "/")
+	if len(tks) < 1 {
+		return
+	}
+	// i.e., v1 -> core/v1
+	version = tks[0]
+	if len(tks) < 2 {
+		return
+	}
+	group, version = tks[0], tks[1]
+	return
+}
+
+// ContainString checks if the slice contains the string.
+func ContainString(sli []string, s string) bool {
+	for _, ts := range sli {
+		if ts == s {
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveString removes the string from the slice, if found.
+func RemoveString(sli []string, s string) (ret []string) {
+	for i, ts := range sli {
+		if ts == s {
+			sli = append(sli[:i], sli[i+1:]...)
+		}
+	}
+	ret = sli
+	return
+}

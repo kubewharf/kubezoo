@@ -17,13 +17,18 @@ limitations under the License.
 package controller
 
 import (
+	"encoding/json"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog"
 
 	tenantv1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/tenant/v1alpha1"
@@ -55,15 +60,15 @@ var _ = Describe("Tenant controller", func() {
 		}
 
 		clusterRoles := []string{"cluster-admin", "admin"}
-		for _, clusterrole := range clusterRoles {
-			name := tenant.Name + "-" + clusterrole
+		for _, clusterRole := range clusterRoles {
+			name := tenant.Name + "-" + clusterRole
 			_, err := upstreamClient.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 
 		clusterRoleBindings := []string{"cluster-admin"}
-		for _, clusterclusterRoleBinding := range clusterRoleBindings {
-			name := tenant.Name + "-" + clusterclusterRoleBinding
+		for _, clusterRoleBinding := range clusterRoleBindings {
+			name := tenant.Name + "-" + clusterRoleBinding
 			_, err := upstreamClient.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -77,15 +82,124 @@ var _ = Describe("Tenant controller", func() {
 		Expect(kubeconfig).NotTo(BeEmpty())
 	})
 
+	It("create native cluster-scoped resources", func() {
+		var err error
+
+		_, err = upstreamClient.SchedulingV1().PriorityClasses().Create(ctx, &schedulingv1.PriorityClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testTenantName + "-" + testPriorityClassName,
+			},
+			Value:         1000000,
+			GlobalDefault: false,
+		}, metav1.CreateOptions{})
+		if errors.IsAlreadyExists(err) {
+			err = nil
+		}
+		Expect(err).NotTo(HaveOccurred())
+
+		time.Sleep(1 * time.Second)
+
+		_, err = upstreamClient.SchedulingV1().PriorityClasses().Get(ctx, testTenantName+"-"+testPriorityClassName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("create CRD", func() {
+		var err error
+
+		testCRD := &apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crdPlural + "." + testTenantName + "-" + crdGroup,
+			},
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: testTenantName + "-" + crdGroup,
+				Scope: apiextensionsv1.ClusterScoped,
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
+					Plural:   crdPlural,
+					Kind:     "Foo",
+					ListKind: "FooList",
+					Singular: "foo",
+				},
+				Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+					{
+						Name:    "v1",
+						Served:  true,
+						Storage: true,
+						Schema: &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+								Properties: map[string]apiextensionsv1.JSONSchemaProps{
+									"apiVersion": {
+										Type: "string",
+									},
+									"kind": {
+										Type: "string",
+									},
+									"metadata": {
+										Type: "object",
+									},
+									"spec": {
+										Type:                   "object",
+										XPreserveUnknownFields: &xPreserveUnknownFields,
+									},
+									"status": {
+										Type:                   "object",
+										XPreserveUnknownFields: &xPreserveUnknownFields,
+									},
+								},
+								Required: []string{
+									"metadata",
+									"spec",
+								},
+								Type: "object",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		_, err = crdClient.ApiextensionsV1().CustomResourceDefinitions().Create(ctx, testCRD, metav1.CreateOptions{})
+		if errors.IsAlreadyExists(err) {
+			err = nil
+		}
+		Expect(err).NotTo(HaveOccurred())
+
+		time.Sleep(1 * time.Second)
+
+		_, err = crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crdPlural+"."+testTenantName+"-"+crdGroup, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("create CR", func() {
+		var err error
+		crJson := `{"apiVersion":"kubezoo-controller-test-a.com/v1","kind":"Foo","metadata":{"name":"kubezoo-controller-test-my-foo"},"spec":{"a":"b"}}`
+
+		obj := &unstructured.Unstructured{}
+		err = json.Unmarshal([]byte(crJson), &obj.Object)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(obj.Object).NotTo(BeEmpty())
+
+		gvr := schema.GroupVersionResource{
+			Group:    "kubezoo-controller-test-a.com",
+			Version:  "v1",
+			Resource: "foos",
+		}
+
+		_, err = dynamicClient.Resource(gvr).Create(ctx, obj, metav1.CreateOptions{})
+		if errors.IsAlreadyExists(err) {
+			err = nil
+		}
+		Expect(err).NotTo(HaveOccurred())
+
+		time.Sleep(1 * time.Second)
+
+		_, err = dynamicClient.Resource(gvr).Get(ctx, "kubezoo-controller-test-my-foo", metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("delete tenant", func() {
 		err := controlPlaneClient.TenantV1alpha1().Tenants().Delete(ctx, testTenantName, metav1.DeleteOptions{})
-		klog.Warningf("delete tenant")
 		Expect(err).NotTo(HaveOccurred())
 		time.Sleep(2 * time.Second)
-		ns, _ := upstreamClient.RbacV1().ClusterRoles().List(ctx, metav1.ListOptions{})
-		for _, n := range ns.Items {
-			klog.Warningf("objects name %v, DeleteTime %v", n.Name, n.DeletionTimestamp)
-		}
 
 		systemNamespaces := []string{metav1.NamespaceSystem, metav1.NamespacePublic, corev1.NamespaceNodeLease, corev1.NamespaceDefault}
 		for _, systemNamespace := range systemNamespaces {
@@ -99,8 +213,8 @@ var _ = Describe("Tenant controller", func() {
 		}
 
 		clusterRoles := []string{"cluster-admin", "admin"}
-		for _, clusterrole := range clusterRoles {
-			name := testTenantName + "-" + clusterrole
+		for _, clusterRole := range clusterRoles {
+			name := testTenantName + "-" + clusterRole
 			obj, err := upstreamClient.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
 			if err == nil {
 				klog.Warningf("obj name %s, deletionTime %v", name, obj.DeletionTimestamp)
@@ -111,14 +225,36 @@ var _ = Describe("Tenant controller", func() {
 		}
 
 		clusterRoleBindings := []string{"cluster-admin"}
-		for _, clusterclusterRoleBinding := range clusterRoleBindings {
-			name := testTenantName + "-" + clusterclusterRoleBinding
+		for _, clusterRoleBinding := range clusterRoleBindings {
+			name := testTenantName + "-" + clusterRoleBinding
 			obj, err := upstreamClient.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
 			if err == nil {
 				Expect(obj.DeletionTimestamp).NotTo(BeNil())
 			} else {
 				Expect(errors.IsNotFound(err)).To(BeTrue())
 			}
+		}
+
+		if obj, err := upstreamClient.SchedulingV1().PriorityClasses().Get(ctx, testTenantName+"-"+testPriorityClassName, metav1.GetOptions{}); err == nil {
+			Expect(obj.DeletionTimestamp).NotTo(BeNil())
+		} else {
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+		}
+
+		if obj, err := crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crdPlural+"."+testTenantName+"-"+crdGroup, metav1.GetOptions{}); err == nil {
+			Expect(obj.GetDeletionTimestamp()).NotTo(BeNil())
+		} else {
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+		}
+
+		if obj, err := dynamicClient.Resource(schema.GroupVersionResource{
+			Group:    "kubezoo-controller-test-a.com",
+			Version:  "v1",
+			Resource: "foos",
+		}).Get(ctx, "kubezoo-controller-test-my-foo", metav1.GetOptions{}); err == nil {
+			Expect(obj.GetDeletionTimestamp()).NotTo(BeNil())
+		} else {
+			Expect(errors.IsNotFound(err)).To(BeTrue())
 		}
 	})
 })

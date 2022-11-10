@@ -28,7 +28,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -37,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	tenantv1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/tenant/v1alpha1"
+	"github.com/kubewharf/kubezoo/pkg/dynamic"
 	tenantclientset "github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned"
 	tenantinformer "github.com/kubewharf/kubezoo/pkg/generated/informers/externalversions/tenant/v1alpha1"
 )
@@ -47,11 +50,17 @@ var (
 	upstreamCfg         *rest.Config
 	controlPlaneClient  tenantclientset.Interface
 	upstreamClient      kubernetes.Interface
+	dynamicClient       dynamic.Interface
+	discoveryClient     *discovery.DiscoveryClient
+	crdClient           *apiextensions.Clientset
 	ctx                 context.Context
 	cancel              context.CancelFunc
 
 	testTenantName         = "kubezoo-controller-test"
 	xPreserveUnknownFields = true
+	testPriorityClassName  = "high-priority"
+	crdPlural              = "foos"
+	crdGroup               = "a.com"
 )
 
 func TestTenantController(t *testing.T) {
@@ -90,6 +99,18 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(upstreamClient).NotTo(BeNil())
 
+	dynamicClient, err = dynamic.NewForConfig(upstreamCfg)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(dynamicClient).NotTo(BeNil())
+
+	discoveryClient, err = discovery.NewDiscoveryClientForConfig(upstreamCfg)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(discoveryClient).NotTo(BeNil())
+
+	crdClient, err = apiextensions.NewForConfig(upstreamCfg)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(crdClient).NotTo(BeNil())
+
 	// generate client ca key and cert
 	tempDir, err := os.MkdirTemp("", "kubezoo")
 	Expect(err).NotTo(HaveOccurred())
@@ -119,6 +140,9 @@ var _ = BeforeSuite(func() {
 			informer,
 			controlPlaneClient.TenantV1alpha1(),
 			upstreamClient,
+			discoveryClient,
+			dynamicClient,
+			crdClient,
 			clientCACert,
 			clientCAKey,
 			host,
