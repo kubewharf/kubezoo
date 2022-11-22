@@ -17,12 +17,13 @@ limitations under the License.
 package main
 
 import (
-	quota "github.com/kubewharf/kubezoo/pkg/apis/quota"
-	quotav1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/quota/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	scheme "k8s.io/client-go/kubernetes/scheme"
+
+	quota "github.com/kubewharf/kubezoo/pkg/apis/quota"
+	quotav1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/quota/v1alpha1"
 )
 
 func init() {
