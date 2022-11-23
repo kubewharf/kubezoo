@@ -53,11 +53,6 @@ gen_kubezoo_pki() {
     gen_kubernetes_cert
 }
 
-gen_kubezoo_quota_pki() {
-    [ -z $KUBEZOO_DIR ] || mkdir -p $KUBEZOO_DIR
-
-}
-
 gen_ca() {
     cat >$KUBEZOO_DIR/ca-config.json <<EOF
 {
