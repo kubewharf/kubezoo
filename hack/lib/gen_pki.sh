@@ -23,7 +23,7 @@ if [ ${CONTEXT_NAME::5} != "kind-" ]; then
     exit 1
 fi
 KIND_SERVER="$(yq eval '.clusters.[]|select(.name=="'${CONTEXT_NAME}'")|.cluster.server' ~/.kube/config)"
-readonly TEMP_DIR=$(pwd -P)/_output/pki
+readonly TEMP_DIR="${REPO_ROOT}/_output/pki"
 readonly UPSTREAM_DIR=$TEMP_DIR/upstream
 readonly KUBEZOO_DIR=$TEMP_DIR/kubezoo
 
