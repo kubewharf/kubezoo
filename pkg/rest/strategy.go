@@ -22,13 +22,14 @@ import (
 
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
 
-	"github.com/kubewharf/kubezoo/pkg/apis/tenant/v1alpha1"
+	tenantv1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/tenant/v1alpha1"
 	"github.com/kubewharf/kubezoo/pkg/util"
 )
 
@@ -39,7 +40,7 @@ func NewStrategy(typer runtime.ObjectTyper) tenantStrategy {
 
 // GetAttrs returns labels.Set, fields.Set, and error in case the given runtime.Object is not a Flunder
 func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
-	apiserver, ok := obj.(*v1alpha1.Tenant)
+	apiserver, ok := obj.(*tenantv1alpha1.Tenant)
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a Tenant")
 	}
@@ -47,7 +48,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 }
 
 // SelectableFields returns a field set that represents the object.
-func SelectableFields(obj *v1alpha1.Tenant) fields.Set {
+func SelectableFields(obj *tenantv1alpha1.Tenant) fields.Set {
 	return generic.ObjectMetaFieldsSet(&obj.ObjectMeta, true)
 }
 
@@ -71,13 +72,21 @@ func (tenantStrategy) NamespaceScoped() bool {
 }
 
 func (tenantStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	tenant := obj.(*tenantv1alpha1.Tenant)
+	tenant.Generation = 1
 }
 
 func (tenantStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newTenant := obj.(*tenantv1alpha1.Tenant)
+	oldTenant := old.(*tenantv1alpha1.Tenant)
+
+	if !apiequality.Semantic.DeepEqual(newTenant.Spec, oldTenant.Spec) {
+		newTenant.Generation = oldTenant.Generation + 1
+	}
 }
 
 func (tenantStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
-	tenant := obj.(*v1alpha1.Tenant)
+	tenant := obj.(*tenantv1alpha1.Tenant)
 	err := util.ValidateTenantName(tenant.Name)
 	if err != nil {
 		return field.ErrorList{&field.Error{
