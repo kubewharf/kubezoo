@@ -65,6 +65,13 @@ spec:
     args:
     - -f
     - /dev/null
+    resources:
+      limits:
+        cpu: 0.5
+        memory: '0.5Gi'
+      requests:
+        cpu: 0.5
+        memory: '0.5Gi'
 EOF
 pod/test created
 ```
