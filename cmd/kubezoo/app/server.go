@@ -34,6 +34,7 @@ import (
 	extensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	externalinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	"k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	util_net "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -526,6 +527,8 @@ func buildProxyConfig(o *options.ProxyOptions) (*ProxyConfig, error) {
 		if clusterQuotaClient == nil {
 			klog.Warningf("upstream cluster does not have a resource 'clusterresourcequotas'")
 		}
+	} else if errors.IsNotFound(err) {
+		klog.Warningf("upstream cluster does not have a resource 'clusterresourcequotas'")
 	} else {
 		klog.Warningf("failed to init cluster quota client with discovery error %v", err)
 		return nil, err
