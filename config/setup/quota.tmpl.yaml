@@ -1,0 +1,148 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubezoo-cluster-resource-quota
+  labels:
+    app: kubezoo-cluster-resource-quota
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubezoo-cluster-resource-quota
+  template:
+    metadata:
+      labels:
+        app: kubezoo-cluster-resource-quota
+    spec:
+      serviceAccountName: kubezoo-cluster-resource-quota
+      containers:
+        - name: resource-quota
+          image: kubezoo/clusterresourcequota:local-up
+          imagePullPolicy: IfNotPresent
+          command:
+          - /usr/local/bin/clusterresourcequota
+          - -webhook-port=6443
+          - -webhook-cert-dir=/etc/quota-webhook/pki
+          ports:
+            - name: webhook
+              containerPort: 6443
+              protocol: TCP
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: healthz
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz/
+              port: healthz
+          readinessProbe:
+            httpGet:
+              path: /healthz/
+              port: healthz
+          volumeMounts:
+          - name: quota-webhook-pki
+            mountPath: /etc/quota-webhook/pki
+          - name: log
+            mountPath: /var/log/kubezoo-quota
+      volumes:
+      - name: quota-webhook-pki
+        secret:
+          secretName: quota-webhook-pki
+      - name: log
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubezoo-cluster-resource-quota
+
+---
+# quota service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubezoo-cluster-resource-quota
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6443
+      targetPort: webhook
+      protocol: TCP
+      name: webhook
+    - port: 8080
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    - port: 8081
+      targetPort: healthz
+      protocol: TCP
+      name: healthz
+  selector:
+    app: kubezoo-cluster-resource-quota
+
+---
+# quota controller cluster role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubezoo-cluster-resource-quota
+rules:
+- apiGroups:
+  - "*"
+  resources:
+  - "*"
+  verbs:
+  - "*"
+---
+# quota controller cluster role binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubezoo-cluster-resource-quota
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubezoo-cluster-resource-quota
+subjects:
+- kind: ServiceAccount
+  name: kubezoo-cluster-resource-quota
+  namespace: default
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: clusterresourcequota.kubezoo.io
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: {caBundle}
+    service:
+      name: kubezoo-cluster-resource-quota
+      namespace: default
+      path: /admission/validating/clusterresourcequotas
+      port: 6443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: clusterresourcequota.kubezoo.io
+  namespaceSelector: {}
+  objectSelector: 
+    matchExpressions:
+    - key: app
+      operator: NotIn
+      values: 
+      - kubezoo-cluster-resource-quota
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods
+    scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 5

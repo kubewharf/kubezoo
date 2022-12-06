@@ -31,61 +31,65 @@ func InitConvertors(checkGroupKind util.CheckGroupKindFunc, listTenantCRDs ListT
 	nopeConvertor := NewNopeConvertor()
 
 	nativeKindToConvertors := map[schema.GroupKind]common.ObjectConvertor{
-		schema.GroupKind{
+		{
+			Group: "",
+			Kind:  "Namespace",
+		}: NewCrossReferenceConverter(defaultConvertor, NewNamespaceTransformer()),
+		{
 			Group: "",
 			Kind:  "Endpoints",
 		}: NewCrossReferenceConverter(defaultConvertor, NewEndpointsTransformer(objectReferenceTransformer)),
-		schema.GroupKind{
+		{
 			Group: "discovery.k8s.io",
 			Kind:  "EndpointSlice",
 		}: NewCrossReferenceConverter(defaultConvertor, NewEndpointSliceTransformer(objectReferenceTransformer)),
-		schema.GroupKind{
+		{
 			Group: "",
 			Kind:  "Event",
 		}: NewCrossReferenceConverter(defaultConvertor, NewEventTransformer(objectReferenceTransformer)),
-		schema.GroupKind{
+		{
 			Group: "apiextensions.k8s.io",
 			Kind:  "CustomResourceDefinition",
 		}: NewCRDConvertor(ownerReferenceTransformer),
-		schema.GroupKind{
+		{
 			Group: "",
 			Kind:  "PersistentVolumeClaim",
 		}: defaultConvertor,
-		schema.GroupKind{
+		{
 			Group: "",
 			Kind:  "PersistentVolume",
 		}: nopeConvertor,
-		schema.GroupKind{
+		{
 			Group: "storage.k8s.io",
 			Kind:  "VolumeAttachment",
 		}: NewCrossReferenceConverter(defaultConvertor, NewVolumeAttachmentTransformer()),
-		schema.GroupKind{
+		{
 			Group: "rbac.authorization.k8s.io",
 			Kind:  "ClusterRole",
 		}: NewCrossReferenceConverter(defaultConvertor, NewClusterRoleTransformer(listTenantCRDs)),
-		schema.GroupKind{
+		{
 			Group: "rbac.authorization.k8s.io",
 			Kind:  "ClusterRoleBinding",
 		}: NewCrossReferenceConverter(defaultConvertor, NewClusterRoleBindingTransformer()),
-		schema.GroupKind{
+		{
 			Group: "rbac.authorization.k8s.io",
 			Kind:  "Role",
 		}: NewCrossReferenceConverter(defaultConvertor, NewRoleTransformer(listTenantCRDs)),
-		schema.GroupKind{
+		{
 			Group: "rbac.authorization.k8s.io",
 			Kind:  "RoleBinding",
 		}: NewCrossReferenceConverter(defaultConvertor, NewRoleBindingTransformer()),
-		schema.GroupKind{
+		{
 			Group: "authentication.k8s.io",
 			Kind:  "TokenReview",
 		}: NewCrossReferenceConverter(defaultConvertor, NewTokenReviewTransformer()),
 
 		// resources with nope convertor:
-		schema.GroupKind{
+		{
 			Group: "scheduling.k8s.io",
 			Kind:  "PriorityClass",
 		}: nopeConvertor,
-		schema.GroupKind{
+		{
 			Group: "policy",
 			Kind:  "PodSecurityPolicy",
 		}: nopeConvertor,

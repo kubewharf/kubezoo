@@ -81,9 +81,9 @@ func (t *ownerReferenceTransformer) Backward(or *metav1.OwnerReference, tenantID
 		return nil, err
 	}
 	if !namespaced {
-		if !strings.HasPrefix(or.Name, tenantID) {
-			return nil, fmt.Errorf("ownerReference: %+v, name: %s must have tenantID prefix: %s", or, or.Name, tenantID)
-		}
+		// if !strings.HasPrefix(or.Name, tenantID) {
+		// 	return nil, fmt.Errorf("ownerReference: %+v, name: %s must have tenantID prefix: %s", or, or.Name, tenantID)
+		// }
 		or.Name = util.TrimTenantIDPrefix(tenantID, or.Name)
 	}
 	if customResourceGroup {

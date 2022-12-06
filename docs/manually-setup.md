@@ -6,79 +6,23 @@ a `kind` cluster as the upstream cluster.
 
 ### Prerequisites
 
-Please install the latest version of [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/), [yq](https://github.com/mikefarah/yq#install) and [cfssl](https://github.com/cloudflare/cfssl#installation)
+Please install the latest version of 
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- [yq](https://github.com/mikefarah/yq#install)
+- [cfssl](https://github.com/cloudflare/cfssl#installation)
 
-### Create `kind` cluster and set kubectl context
+### Create `kind` cluster and run kubezoo on it
+
+Run the following command to create local kubezoo enviroment
 
 ```console
-kind create cluster
-kubectl config use-context kind-kind
+make local-up
 ```
 
-### Create secrets storing required certificates/keys
-
-We need two sets of certificates/keys to run KubeZoo: 
-1. certificates/keys used to secure the communication between tenant clients 
-and KubeZoo, which will be generated locally and store in the 
-secret `kubezoo-pki`; 
-2. certificates/keys used to secure the communication between KubeZoo and the 
-upstream cluster, which will need to be fetched from the upstream cluster and 
-store in the secret `upstream-pki`
-
-```console
-$ bash $KUBEZOO_PATH/hack/lib/gen_pki.sh gen_pki_setup_ctx
+When all processes are ready, kubezoo will run on local port 6443, make sure that port is not occupied by another application and you will see the following output
 ```
-
-Upon success, you should be able to see the two secrets
-
-```console
-$ kubectl get secrets
-NAME                  TYPE                                  DATA   AGE
-default-token-r5kd8   kubernetes.io/service-account-token   3      5h54m
-kubezoo-pki           Opaque                                4      5h37m
-upstream-pki          Opaque                                4      5h41m
-```
-
-This script will also setup a `kubectl` context for accessing `KubeZoo`
-```console
-$ kubectl config get-contexts
-CURRENT   NAME        CLUSTER     AUTHINFO    NAMESPACE
-*         kind-kind   kind-kind   kind-kind
-          zoo         zoo         zoo-admin
-```
-
-### Set up KubeZoo and Etcd
-
-KubeZoo can share the Etcd cluster with the upstream cluster, but in this demo, 
-we will create an independent Etcd cluster for KubeZoo. We have put all 
-required yaml in `$KUBEZOO_PATH/config/setup/all_in_one.yaml`
-
-```console
-kubectl apply -f $KUBEZOO_PATH/config/setup/all_in_one.yaml
-```
-
-if everything goes as expected, we should see the related resources are ready.
-
-```console
-$ kubectl get all
-NAME                 READY   STATUS    RESTARTS   AGE
-pod/kubezoo-0        1/1     Running   0          4h58m
-pod/kubezoo-etcd-0   1/1     Running   0          4h58m
-
-NAME                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-service/kubernetes     ClusterIP   *               <none>        443/TCP          6h21m
-service/kubezoo        NodePort    *               <none>        6443:30485/TCP   4h58m
-service/kubezoo-etcd   ClusterIP   None            <none>        <none>           4h58m
-
-NAME                            READY   AGE
-statefulset.apps/kubezoo        1/1     4h58m
-statefulset.apps/kubezoo-etcd   1/1     4h58m
-```
-
-### Export the KubeZoo service
-
-```console
-$ kubectl port-forward svc/kubezoo 6443:6443
+Export kubezoo server to 6443
 Forwarding from 127.0.0.1:6443 -> 6443
 Forwarding from [::1]:6443 -> 6443
 ```
@@ -124,6 +68,13 @@ spec:
     args:
     - -f
     - /dev/null
+    resources:
+      limits:
+        cpu: 0.5
+        memory: '0.5Gi'
+      requests:
+        cpu: 0.5
+        memory: '0.5Gi'
 EOF
 pod/test created
 ```

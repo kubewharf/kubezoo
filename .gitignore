@@ -1,2 +1,4 @@
 .idea
 _output
+bin
+.vscode

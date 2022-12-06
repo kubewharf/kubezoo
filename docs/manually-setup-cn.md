@@ -5,76 +5,21 @@
 
 ### 前置条件
 
-请安装最新版本的 [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), [kubectl](https://kubernetes.io/docs/tasks/tools/), [yq](https://github.com/mikefarah/yq#install) 和 [cfssl](https://github.com/cloudflare/cfssl#installation)
+请安装最新版本的 
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- [yq](https://github.com/mikefarah/yq#install) 
+- [cfssl](https://github.com/cloudflare/cfssl#installation)
 
-### 创建 `kind` 集群并配置 kubectl 上下文 
-
+### 创建本地环境
+通过运行下面的命令在本地构建 kubezoo 的环境
 ```console
-kind create cluster
-kubectl config use-context kind-kind
+make local-up
 ```
 
-### 创建用于存储证书和秘钥的 secrets
-
-
-我们需要两套证书/秘钥用来运行 KubeZoo:
-1. 用于加密租户客户端和 KubeZoo 之间流量的证书和秘钥，本地生成后存储在 secret `kubezoo-pki` 中；
-2. 用于加密 KubeZoo 和上游集群之间流量的证书和秘钥，这部分证书/秘钥需要从上游集群获取，
-   然后存储在 secret  `upstream-pki` 中.
-
-```console
-$ bash $KUBEZOO_PATH/hack/lib/gen_pki.sh gen_pki_setup_ctx
+当所有流程都准备就绪后，kubezoo 将运行在本地的 6443 端口，请确保该端口没有被别的程序占用，你会看到以下输出
 ```
-
-如果上述命令成功运行，你将看到下面两个 secret:
-
-```console
-$ kubectl get secrets
-NAME                  TYPE                                  DATA   AGE
-default-token-r5kd8   kubernetes.io/service-account-token   3      5h54m
-kubezoo-pki           Opaque                                4      5h37m
-upstream-pki          Opaque                                4      5h41m
-```
-
-上述脚本也会创建一个 `kubectl` 上下文用于访问 `KubeZoo`
-```console
-$ kubectl config get-contexts
-CURRENT   NAME        CLUSTER     AUTHINFO    NAMESPACE
-*         kind-kind   kind-kind   kind-kind
-          zoo         zoo         zoo-admin
-```
-
-### 搭建 KubeZoo 和 Etcd
-
-KubeZoo 可以和上游集群共享 Etcd 集群，但是在本样例中，我们将会为 KubeZoo 创建一个独立的 Etcd 集群.
-集群配置都被放在 yaml 文件中：`$KUBEZOO_PATH/config/setup/all_in_one.yaml`
-
-```console
-kubectl apply -f $KUBEZOO_PATH/config/setup/all_in_one.yaml
-```
-
-如果一切顺利，我们会看到相关的资源已经就绪.
-
-```console
-$ kubectl get all
-NAME                 READY   STATUS    RESTARTS   AGE
-pod/kubezoo-0        1/1     Running   0          4h58m
-pod/kubezoo-etcd-0   1/1     Running   0          4h58m
-
-NAME                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-service/kubernetes     ClusterIP   *               <none>        443/TCP          6h21m
-service/kubezoo        NodePort    *               <none>        6443:30485/TCP   4h58m
-service/kubezoo-etcd   ClusterIP   None            <none>        <none>           4h58m
-
-NAME                            READY   AGE
-statefulset.apps/kubezoo        1/1     4h58m
-statefulset.apps/kubezoo-etcd   1/1     4h58m
-```
-
-### 暴露 KubeZoo service
-
-```console
-$ kubectl port-forward svc/kubezoo 6443:6443
+Export kubezoo server to 6443
 Forwarding from 127.0.0.1:6443 -> 6443
 Forwarding from [::1]:6443 -> 6443
 ```
@@ -120,6 +65,13 @@ spec:
     args:
     - -f
     - /dev/null
+    resources:
+      limits:
+        cpu: 0.5
+        memory: '0.5Gi'
+      requests:
+        cpu: 0.5
+        memory: '0.5Gi'
 EOF
 pod/test created
 ```

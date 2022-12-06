@@ -42,7 +42,7 @@ import (
 	"k8s.io/apiserver/pkg/util/webhook"
 	kubeexternalinformers "k8s.io/client-go/informers"
 
-	"github.com/kubewharf/kubezoo/cmd/app/options"
+	"github.com/kubewharf/kubezoo/cmd/kubezoo/app/options"
 	"github.com/kubewharf/kubezoo/pkg/common"
 	"github.com/kubewharf/kubezoo/pkg/proxy"
 )

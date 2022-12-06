@@ -34,6 +34,7 @@ import (
 	extensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	externalinformer "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
+	"k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	util_net "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -80,8 +81,9 @@ import (
 	"k8s.io/kubernetes/pkg/routes"
 	"k8s.io/kubernetes/pkg/serviceaccount"
 
-	"github.com/kubewharf/kubezoo/cmd/app/options"
+	"github.com/kubewharf/kubezoo/cmd/kubezoo/app/options"
 	generatedopenapi "github.com/kubewharf/kubezoo/pkg/apis/openapi"
+	quotav1alpha1 "github.com/kubewharf/kubezoo/pkg/apis/quota/v1alpha1"
 	_ "github.com/kubewharf/kubezoo/pkg/apis/tenant/install"
 	"github.com/kubewharf/kubezoo/pkg/common"
 	"github.com/kubewharf/kubezoo/pkg/controller"
@@ -89,6 +91,7 @@ import (
 	"github.com/kubewharf/kubezoo/pkg/dynamic"
 	tenantfilters "github.com/kubewharf/kubezoo/pkg/filters"
 	"github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned"
+	quotaclient "github.com/kubewharf/kubezoo/pkg/generated/clientset/versioned/typed/quota/v1alpha1"
 	"github.com/kubewharf/kubezoo/pkg/generated/informers/externalversions"
 	"github.com/kubewharf/kubezoo/pkg/proxy"
 	tenantrest "github.com/kubewharf/kubezoo/pkg/rest"
@@ -283,6 +286,7 @@ func CreateKubeZooServer(kubeAPIServerConfig *master.Config,
 			proxyConfig.discoveryClient,
 			proxyConfig.dynamicClient,
 			proxyConfig.crdClient,
+			proxyConfig.quotaClient,
 			proxyConfig.clientCAFile,
 			proxyConfig.clientCAKeyFile,
 			proxyConfig.proxyBindAddress,
@@ -439,6 +443,7 @@ type ProxyConfig struct {
 	discoveryClient *clidiscovery.DiscoveryClient
 	crdClient       *apiextensions.Clientset
 	typedClientSet  kubernetes.Interface
+	quotaClient     quotaclient.QuotaV1alpha1Interface
 
 	crdInformers externalinformer.SharedInformerFactory
 
@@ -503,6 +508,32 @@ func buildProxyConfig(o *options.ProxyOptions) (*ProxyConfig, error) {
 
 	crdInformers := externalinformer.NewSharedInformerFactory(crdClient, 5*time.Minute)
 	crdLister := crdInformers.Apiextensions().V1().CustomResourceDefinitions().Lister()
+
+	var clusterQuotaClient quotaclient.QuotaV1alpha1Interface
+	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersion(quotav1alpha1.GroupVersion.String())
+	if err == nil {
+		for _, resource := range apiResourceList.APIResources {
+			klog.Infof("find resource group=%v verions=%v  kind=%v", resource.Group, resource.Version, resource.Kind)
+			if resource.Name == "clusterresourcequotas" {
+				var nerr error
+				clusterQuotaClient, nerr = quotaclient.NewForConfig(upstreamConfig)
+				if nerr != nil {
+					klog.Warningf("failed to init cluster quota client with error %v", err)
+					return nil, err
+				}
+				break
+			}
+		}
+		if clusterQuotaClient == nil {
+			klog.Warningf("upstream cluster does not have a resource 'clusterresourcequotas'")
+		}
+	} else if errors.IsNotFound(err) {
+		klog.Warningf("upstream cluster does not have a resource 'clusterresourcequotas'")
+	} else {
+		klog.Warningf("failed to init cluster quota client with discovery error %v", err)
+		return nil, err
+	}
+
 	checkGroupKind := util.NewCheckGroupKindFunc(crdLister)
 	listTenantCRDs := convert.ListTenantCRDsFunc(func(tenantID string) ([]*apiextensionsv1.CustomResourceDefinition, error) {
 		return util.ListCRDsForTenant(tenantID, crdLister)
@@ -532,6 +563,7 @@ func buildProxyConfig(o *options.ProxyOptions) (*ProxyConfig, error) {
 		crdClient:        crdClient,
 		typedClientSet:   typedClientSet,
 		crdInformers:     crdInformers,
+		quotaClient:      clusterQuotaClient,
 		nativeConvertor:  nativeConvertor,
 		customConvertor:  customConvertor,
 		proxyTransport:   proxyTransport,
@@ -912,7 +944,7 @@ var CommonNameUserConversion = x509.UserConversionFunc(func(chain []*stdx509.Cer
 		if len(OrganizationalUnit[0]) == tenantIDLength && len(CommonName) > tenantIDLength {
 			if OrganizationalUnit[0] == CommonName[:tenantIDLength] && CommonName[tenantIDLength] == '-' {
 				tenantName := OrganizationalUnit[0]
-				u.Extra = map[string][]string{"tenant": []string{tenantName}}
+				u.Extra = map[string][]string{"tenant": {tenantName}}
 			}
 		}
 	}

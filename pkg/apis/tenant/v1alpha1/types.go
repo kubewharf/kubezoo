@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,10 +33,7 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Tenant struct {
-	metav1.TypeMeta `json:",inline"`
-	// `metadata` is the standard object's metadata.
-	// More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata
-	// +optional
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	// `spec` is the specification of the desired behavior of a flow-schema.
 	// More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status
@@ -63,7 +61,15 @@ type TenantList struct {
 
 // TenantSpec describes how the proxy-rule's specification looks like.
 type TenantSpec struct {
-	ID int32 `json:"id" protobuf:"varint,1,name=id"`
+	ID    int32       `json:"id" protobuf:"varint,1,name=id"`
+	Quota TenantQuota `json:"quota" protobuf:"bytes,2,name=quota"`
+}
+
+type TenantQuota struct {
+	// hard is the set of desired hard limits for each named resource.
+	// More info: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+	// +optional
+	Hard corev1.ResourceList `json:"hard,omitempty" protobuf:"bytes,1,rep,name=hard,casttype=ResourceList,castkey=ResourceName"`
 }
 
 // TenantStatus represents the current state of a rule.
