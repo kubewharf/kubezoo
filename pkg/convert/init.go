@@ -93,6 +93,10 @@ func InitConvertors(checkGroupKind util.CheckGroupKindFunc, listTenantCRDs ListT
 			Group: "policy",
 			Kind:  "PodSecurityPolicy",
 		}: nopeConvertor,
+		{
+			Group: "",
+			Kind:  "Node",
+		}: nopeConvertor,
 	}
 	nativeConvertor = NewNativeObjectConvertor(defaultConvertor, nativeKindToConvertors)
 	customConvertor = NewCrossReferenceConverter(defaultConvertor, NewCustomResourceTransformer())
