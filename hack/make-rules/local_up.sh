@@ -26,6 +26,7 @@ readonly REQUIRED_CMD=(
     kind
 )
 
+readonly LOCAL_UP_IMAGE_TAG="v0.2.0"
 readonly LOCAL_ARCH=$(go env GOHOSTARCH)
 readonly LOCAL_OS=$(go env GOHOSTOS)
 readonly CLUSTER_NAME="kubezoo-e2e-test"
@@ -58,18 +59,18 @@ local_up() {
     if kind get clusters | grep "${CLUSTER_NAME}"; then
         cleanup
     else
-        kind create cluster --name $CLUSTER_NAME
+        kind create cluster --name "${CLUSTER_NAME}"
     fi
+    kubectl config use-context "kind-${CLUSTER_NAME}"
 
     echo "Generating PKI and context..."
-    bash $ZOO_ROOT/hack/lib/gen_pki.sh gen_pki_setup_ctx
-
-    # echo "Building image..."
-    IMAGE_TAG="local-up" make docker-build
+    bash "${ZOO_ROOT}"/hack/lib/gen_pki.sh gen_pki_setup_ctx
 
     # echo "Loading image on $CLUSTER_NAME..."
-    kind load docker-image --name="${CLUSTER_NAME}" kubezoo/clusterresourcequota:local-up
-    kind load docker-image --name="${CLUSTER_NAME}" kubezoo/kubezoo:local-up
+    docker pull kubezoo/kubezoo:"${LOCAL_UP_IMAGE_TAG}"
+    docker pull kubezoo/clusterresourcequota:"${LOCAL_UP_IMAGE_TAG}"
+    docker tag kubezoo/kubezoo:"${LOCAL_UP_IMAGE_TAG}" kubezoo/kubezoo:local-up
+    docker tag kubezoo/clusterresourcequota:"${LOCAL_UP_IMAGE_TAG}" kubezoo/clusterresourcequota:local-up
 
     echo "Setting up ClusterResourceQuota on $CLUSTER_NAME..."
     # run quota controller and webhook
