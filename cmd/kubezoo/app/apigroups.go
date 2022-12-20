@@ -11,6 +11,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	authorizationv1beta1 "k8s.io/api/authorization/v1beta1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	autoscalingv2beta1 "k8s.io/api/autoscaling/v2beta1"
 	autoscalingv2beta2 "k8s.io/api/autoscaling/v2beta2"
 	batchapiv1 "k8s.io/api/batch/v1"
@@ -1094,6 +1095,24 @@ var nonLegacyGroups = []common.APIGroupConfig{
 				},
 				"horizontalpodautoscalers/status": {
 					Kind:            autoscalingv2beta2.SchemeGroupVersion.WithKind("HorizontalPodAutoscaler"),
+					Resource:        "horizontalpodautoscalers",
+					Subresource:     "status",
+					NamespaceScoped: true,
+					ShortNames:      []string{"hpa"},
+					NewFunc:         func() runtime.Object { return &autoscaling.HorizontalPodAutoscaler{} },
+				},
+			},
+			"v2": {
+				"horizontalpodautoscalers": {
+					Kind:            autoscalingv2.SchemeGroupVersion.WithKind("HorizontalPodAutoscaler"),
+					Resource:        "horizontalpodautoscalers",
+					NamespaceScoped: true,
+					ShortNames:      []string{"hpa"},
+					NewFunc:         func() runtime.Object { return &autoscaling.HorizontalPodAutoscaler{} },
+					NewListFunc:     func() runtime.Object { return &autoscaling.HorizontalPodAutoscalerList{} },
+				},
+				"horizontalpodautoscalers/status": {
+					Kind:            autoscalingv2.SchemeGroupVersion.WithKind("HorizontalPodAutoscaler"),
 					Resource:        "horizontalpodautoscalers",
 					Subresource:     "status",
 					NamespaceScoped: true,

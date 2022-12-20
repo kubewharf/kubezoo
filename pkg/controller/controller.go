@@ -423,7 +423,7 @@ func (tc *TenantController) syncClusterResourceQuota(tenantID string) error {
 	tenant, err := tc.tenantClient.Tenants().Get(context.TODO(), tenantID, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			nerr := tc.tenantClient.Tenants().Delete(context.TODO(), tenantQuotaName, metav1.DeleteOptions{})
+			nerr := tc.clusterquotaCli.ClusterResourceQuotas().Delete(context.TODO(), tenantQuotaName, metav1.DeleteOptions{})
 			if apierrors.IsNotFound(nerr) {
 				// ignore notFound
 				nerr = nil
