@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"encoding/json"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -42,6 +43,11 @@ type fakeDiscoveryProxy struct {
 	apiGroupList    *metav1.APIGroupList
 	apiGroup        *metav1.APIGroup
 	apiResourceList *metav1.APIResourceList
+}
+
+func (dp *fakeDiscoveryProxy) GetSwagger() (*spec.Swagger, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (dp *fakeDiscoveryProxy) ServerGroups(tenantID string) (*metav1.APIGroupList, error) {
