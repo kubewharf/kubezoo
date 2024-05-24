@@ -47,3 +47,5 @@ jobs:
           cache-dependency-path: go.sum
 
       - run: make e2e
+        env:
+          GOPATH: "${{ runner.temp }}/go"
