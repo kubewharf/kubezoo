@@ -52,8 +52,7 @@ cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
 go get $(2) ;\
-go list -f '{{ .Dir }}' -m $(2) ;\
-cd $(shell go list -f '{{ .Dir }}' -m $(2)) ;\
+cd $(shell go list -f \'{{ .Dir }}\' -m $(2)) ;\
 GOBIN=$(PROJECT_DIR)/bin go install $(3) ;\
 rm -rf $$TMP_DIR ;\
 }
