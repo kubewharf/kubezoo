@@ -18,7 +18,7 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - run: go test $(go list ./... | grep -v pkg/controller) -coverprofile cover.out
+      - run: go test ./... -skip 'TestTenantController' -coverprofile cover.out
 
   "build":
     runs-on: ubuntu-latest
