@@ -21,8 +21,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/kubernetes/pkg/serviceaccount"
 
 	"github.com/kubewharf/kubezoo/pkg/util"
 )
