@@ -102,6 +102,7 @@ func CreateAdmissionAttributes(req admissionv1.AdmissionRequest) pkgadmission.At
 		UID:    req.UserInfo.UID,
 		Name:   req.UserInfo.Username,
 		Groups: req.UserInfo.Groups,
+		Extra:  map[string][]string{},
 	}
 	for k := range req.UserInfo.Extra {
 		info.Extra[k] = []string(req.UserInfo.Extra[k])
