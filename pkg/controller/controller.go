@@ -205,9 +205,9 @@ func (tc *TenantController) processItem(e Event) error {
 	// process events based on its type
 	switch e.eventType {
 	case Create:
-		return tc.onTeanntCreate(e.tenantId)
+		return tc.onTenantCreate(e.tenantId)
 	case Update:
-		return tc.onTeanntUpdate(e.tenantId)
+		return tc.onTenantUpdate(e.tenantId)
 	case Delete:
 		klog.Warningf("deleting tenant %v", e.tenantId)
 		return nil
@@ -215,7 +215,7 @@ func (tc *TenantController) processItem(e Event) error {
 	return nil
 }
 
-func (tc *TenantController) onTeanntCreate(tenantID string) error {
+func (tc *TenantController) onTenantCreate(tenantID string) error {
 	if err := tc.onTenantAddOrUpdate(tenantID); err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (tc *TenantController) onTeanntCreate(tenantID string) error {
 	return nil
 }
 
-func (tc *TenantController) onTeanntUpdate(tenantID string) error {
+func (tc *TenantController) onTenantUpdate(tenantID string) error {
 	if err := tc.onTenantAddOrUpdate(tenantID); err != nil {
 		return err
 	}
