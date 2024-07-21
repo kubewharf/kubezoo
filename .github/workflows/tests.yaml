@@ -1,0 +1,35 @@
+permissions: {}
+
+on:
+  push:
+  pull_request:
+
+jobs:
+
+  "unit-tests":
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - run: go test ./... -skip 'TestTenantController' -coverprofile cover.out
+
+  "build":
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - run: make build
